@@ -143,13 +143,30 @@ class PageTextDisplay extends React.Component {
 
   /** Update the selectability of the text nodes.
    *
-   * Again, intended to be called from the parent, again for performance reasons.
+   * Again, intended to be called from the parent, again for performance
+   * reasons. shouldComponentUpdate blocks normal re-renders, so we mutate
+   * the DOM directly to reflect the new selectable mode on the existing
+   * rects.
    */
   updateSelectability(selectable) {
     if (!this.textContainerRef.current) {
       return;
     }
-    this.textContainerRef.current.parentElement.style.userSelect = selectable ? 'text' : 'none';
+    // Update both SVG wrappers (rect SVG below, text SVG above) so the
+    // I-beam shows up regardless of which layer hit-tests under the cursor.
+    const textSvg = this.textContainerRef.current.parentElement;
+    textSvg.style.userSelect = selectable ? 'text' : 'none';
+    textSvg.style.cursor = selectable ? 'text' : 'default';
+    if (this.boxContainerRef.current) {
+      const rectSvg = this.boxContainerRef.current.parentElement;
+      rectSvg.style.cursor = selectable ? 'text' : 'default';
+      const cursor = selectable ? 'text' : 'pointer';
+      const pe = selectable ? 'none' : 'fill';
+      for (const rect of this.boxContainerRef.current.querySelectorAll('rect')) {
+        rect.style.cursor = cursor;
+        rect.style.pointerEvents = pe;
+      }
+    }
   }
 
   /** Highlight a single line rectangle in the OSD overlay.
@@ -227,6 +244,7 @@ class PageTextDisplay extends React.Component {
       width: pageWidth,
       height: pageHeight,
       userSelect: selectable ? 'text' : 'none',
+      cursor: selectable ? 'text' : 'default',
       whiteSpace: 'pre',
     };
     let fg = textColor;
@@ -244,12 +262,15 @@ class PageTextDisplay extends React.Component {
     const renderOpacity = visible ? opacity : 0;
     // pointerEvents: 'fill' makes a transparent rect still receive clicks,
     // which is required because the panel-to-image highlight uses
-    // `fill: rgba(_,0)` as the default. cursor: pointer makes the
-    // affordance discoverable.
+    // `fill: rgba(_,0)` as the default. When text selection is enabled, we
+    // step out of the way: 'none' lets pointer events fall through to the
+    // <text> nodes (so the browser shows an I-beam and selection works);
+    // otherwise we keep the rect clickable with a pointer cursor to expose
+    // the highlight affordance.
     const boxStyle = {
       fill: fade(bg, renderOpacity),
-      pointerEvents: 'fill',
-      cursor: 'pointer',
+      pointerEvents: selectable ? 'none' : 'fill',
+      cursor: selectable ? 'text' : 'pointer',
     };
     const textStyle = {
       fill: fade(fg, renderOpacity),
