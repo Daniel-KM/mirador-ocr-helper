@@ -1,131 +1,251 @@
-# mirador-textoverlay
+# mirador-ocr-helper
 
-[![npm package][npm-badge]][npm]
 [![required Mirador version][mirador-badge]][mirador]
 
-**A Mirador 3 plugin to display a selectable text overlay based on OCR or transcriptions.**
+**A Mirador 4 plugin that adds an OCR side panel next to the OpenSeadragon
+viewer, with bidirectional line highlighting and an optional selectable
+text overlay rendered on the image.**
 
-[![Screenshot][screenshot]][demo]
-**[Demo on https://mirador-textoverlay.netlify.com][demo]** (try selecting some text)
+[![Screenshot][screenshot]][screenshot]
+
+## Provenance
+
+This package is a port of [`@4eyes/mirador-ocr-helper`][upstream-4eyes] 2.0.5
+(itself a fork of [`dbmdz/mirador-textoverlay`][upstream-dbmdz]), updated to
+the Mirador 4 / MUI 7 / React 18+ / Vite stack and reorganised as a
+source-only ESM package (no build step — the host project's bundler
+consumes `src/` directly).
+
+The Mirador 4 port mirrors the work done upstream in
+[dbmdz/mirador-textoverlay#319][upstream-pr-v4] but keeps the side panel
+and click-to-highlight features that the original `mirador-textoverlay`
+does not provide.
+
+License: MIT (unchanged from the 4eyes / dbmdz lineage).
+
+## Features
+
+- **OCR side panel**: lists every OCR line of the current canvas, click a
+  line to highlight + zoom on it in the viewer.
+- **Bidirectional highlight**: click a line in the image to highlight it
+  in the panel (and scroll the panel to that line).
+- **Floating settings bubble** on top of the OpenSeadragon viewer with
+  five buttons: text visibility (Tt), text selection (I-beam), opacity
+  slider, colour palette (text colour + background colour + reset),
+  collapse.
+- **Selectable text overlay**: optionally render a transparent text layer
+  that the browser can select and copy.
+- **Click pass-through when the panel is hidden**: with `panelVisible:
+  false` the rect layer lets pointer events fall through to OSD so the
+  default click-to-zoom keeps working.
+- **Window menu entry**: a `WindowTopBarPluginMenu` item to show/hide the
+  floating settings bubble and the side panel per window.
 
 ## Requirements for supported IIIF manifests
 
-- Line-level annotations with either one of:
-  - a `motivation` that is `supplementing` (IIIF v3)
-  - a resource that has a `@type` that is `cnt:contentAsText`  (IIIF v2)
-  - a `dcType` that is equal to `Line` (Europeana)
-- A per-canvas `seeAlso` entry pointing to the ALTO or hOCR OCR markup for
-  the page with either:
-  - A `format` that is `application/xml+alto` or `text/vnd.hocr+html`
-  - A `profile` starting with `http://www.loc.gov/standards/alto/`,
-  `http://kba.cloud/hocr-spec`, `http://kba.github.io/hocr-spec/` or
-  `https://github.com/kba/hocr-spec/blob/master/hocr-spec.md`
-- If using OCR markup, the plugin can handle arbitrary scaling factors, i.e.
-as long as the OCR matches the canvas it should render fine
+- Line-level annotations with either:
+  - a `motivation` that is `supplementing` (IIIF v3 with embedded
+    `TextualBody` or external resource)
+  - a resource that has a `@type` of `cnt:contentAsText` (IIIF v2)
+  - a `dcType` equal to `Line` (Europeana)
+- Or a per-canvas `seeAlso` entry pointing to ALTO or hOCR OCR markup:
+  - `format`: `application/xml+alto` or `text/vnd.hocr+html`
+  - or `profile` starting with `http://www.loc.gov/standards/alto/`,
+    `http://kba.cloud/hocr-spec`, `http://kba.github.io/hocr-spec/` or
+    `https://github.com/kba/hocr-spec/blob/master/hocr-spec.md`
 
-For a list of example manifests that are supported, refer to the `catalog`
-entry in the [demo instance configuration][demo-cfg-catalog]. If you need
-support for your particular flavor of attaching text to a IIIF canvas, open
-an issue :-)
-
+Arbitrary scaling factors are handled — as long as the OCR matches the
+canvas dimensions the overlay renders at the right place.
 
 ## Installation
-Currently the plugin can only be used if you build your own Mirador JavaScript bundle.
-To include the plugin in your Mirador installation, you need to install it
-from npm with `npm install mirador-textoverlay`, import it into your project
-and pass it to Mirador when you instantiate the viewer:
+
+The package ships as ESM source (no `dist/` build). Add it as a
+dependency of your Mirador host project, then import and register:
 
 ```javascript
-import Mirador from 'mirador/dist/es/src/index';
-import textOverlayPlugin from 'mirador-textoverlay/es';
+import Mirador from 'mirador';
+import ocrHelper from 'mirador-ocr-helper';
 
-const miradorConfig = {
-  // Your Mirador configuration
-}
-Mirador.viewer(config, [...textOverlayPlugin]);
+const config = {
+  // your Mirador configuration
+};
+
+Mirador.viewer(config, [...ocrHelper]);
 ```
 
-## Configuration
-You can configure the plugin globally for all windows and/or individually for
-every window.
+Your bundler (Vite, Rollup, Webpack) must be able to consume JSX from
+`node_modules/mirador-ocr-helper/src`. With Vite, declare the package in
+`optimizeDeps.exclude` or simply rely on the default `esbuild`-based
+transform that handles JSX out of the box.
 
-For global configuration add the `textOverlay` entry to the top-level
-`window` configuration (globally for all windows) or to the individual window
-object:
+## Configuration
+
+Configure globally via `windowDefaults.textOverlay`, or per-window via
+`windows[].textOverlay`:
 
 ```javascript
-const miradorConfig = {
-  window: {
-    // ....
+const config = {
+  windowDefaults: {
     textOverlay: {
-      // Global options for all windows, see available settings below
+      // Global defaults for every window
     },
   },
   windows: [{
-    // ....
+    // ...
     textOverlay: {
-      // Options for an individual window, see available settings below
+      // Per-window overrides
     },
-  }, // ...
-}
+  }],
+};
 ```
 
-You can view an example configuration in [demo/src/index.js][demo-cfg].
+### Available options
 
-The available configuration options (all of which define defaults that can be
-changed through the UI, except for `enabled` and `fontFamily`) are:
+| Option                | Type    | Default      | Notes                                                                                       |
+|-----------------------|---------|--------------|---------------------------------------------------------------------------------------------|
+| `enabled`             | bool    | `true`       | Whether the plugin is active for the window.                                                |
+| `visible`             | bool    | `false`      | Whether the text overlay is painted on the image (toggled by the Tt button).                |
+| `selectable`          | bool    | `false`      | Whether the text overlay is selectable (toggled by the I button).                           |
+| `opacity`             | number  | `0`          | Text overlay opacity, `0` to `1`.                                                           |
+| `useAutoColors`       | bool    | `false`      | Try to derive text/bg colour from the page image. Skipped at boot when `false` (perf win).  |
+| `textColor`           | string  | `'#000000'`  | Fallback text colour.                                                                       |
+| `bgColor`             | string  | `'#00FF7B'`  | Fallback background colour (also the panel-to-image highlight colour).                      |
+| `bubbleVisible`       | bool    | `false`      | Whether the floating settings bubble is shown on the OSD viewer.                            |
+| `panelVisible`        | bool    | `true`       | Whether the side OCR panel is rendered. Set to `false` to never show the panel.             |
+| `panelScrollBehavior` | string  | `'smooth'`   | Side panel scroll animation: `'smooth'`, `'instant'` or `'auto'`.                           |
+| `skipEmptyLines`      | bool    | `true`       | Hide OCR lines with empty `text` from the panel.                                            |
+| `optionsRenderMode`   | string  | `'complex'`  | `'complex'` (full bubble) or `'simple'` (Tt button only).                                   |
+| `correction`          | object  | see below    | Email-based OCR correction reporting.                                                       |
 
-- `enabled`: If the plugin is enabled. Boolean, defaults to `true`.
-- `selectable`: Set default text selectability. Boolean, defaults to `false`.
-- `visible`: Set default text visibility. Boolean, defaults to `false`.
-- `opacity`: Default opacity of the visible text. Number between `0` and `1`,
-  defaults to `1.0`
-- `useAutoColors`: Try to determine fitting text and background colors from
-  the page image itself.<br>
-  Falls back to `textCololor`/`bgColor` if
-  auto-detection fails (e.g. due to missing CORS headers).<br>
-  Boolean, defaults
-  to `true`.
-- `textColor`: Set default text color. RGB color string, defaults to
-  `#000000` (black)
-- `bgColor`: Set default text background color. RGB color string, defaults to
-  `#ffffff` (white)
+### `correction` sub-options
 
-The plugin also supports theming for a few things, these can be set under the
-`textOverlay` section for the light and/or dark theme (see
-[Mirador 3 Theming](https://github.com/ProjectMirador/mirador/wiki/M3-Theming-Mirador)
-on how to set these values):
+| Option                | Type       | Default   | Notes                                                                |
+|-----------------------|------------|-----------|----------------------------------------------------------------------|
+| `enabled`             | bool       | `false`   | Enable the per-line correction button (mailto link).                 |
+| `emailRecipient`      | string     | `null`    | Recipient address for the mailto link.                               |
+| `emailUrlKeepParams`  | string[]   | `[]`      | URL query parameters to forward in the mailto body.                  |
 
-- `overlayFont`: Font(s) to use for rendering text. Any valid `font-family` CSS value
-- `selectionTextColor`: Color to use for rendering text when part of a selection. Any legal CSS color value.
-- `selectionBackgroundColor`: Color to use for text background when part of a selection. Any legal CSS color value.
+### Theming
+
+The plugin reads two values from the Mirador theme under `textOverlay`:
+
+- `overlayFont` — `font-family` for the text overlay.
+- `selectionTextColor` / `selectionBackgroundColor` — currently unused
+  (the browser's native selection style is preferred since v4 to avoid a
+  Chrome SVG bug where the selection colour leaked back into the
+  resting style).
+
+## UI controls
+
+When `bubbleVisible` is true and the OCR is available, a five-button
+floating bubble appears on the OSD viewer, top-right:
+
+| Button   | Icon                          | Toggles                            |
+|----------|-------------------------------|------------------------------------|
+| Tt       | `TextFieldsIcon`              | `visible` (and the side panel).    |
+| I-beam   | `TextSelectIcon`              | `selectable`.                      |
+| Opacity  | `OpacityIcon` + slider        | `opacity`.                         |
+| Palette  | `PaletteIcon` + colour popup  | `textColor` / `bgColor` + reset.   |
+| Close    | `CloseIcon`                   | Collapses the bubble.              |
+
+The colour popup shows two colour pickers (text + background) and, when
+either colour differs from its default, a reset button at the bottom
+that restores the defaults.
+
+The window-level `WindowTopBarPluginMenu` (the 3-dots menu next to the
+window title) exposes a single entry, "Show / Hide text overlay", that
+toggles `bubbleVisible`.
 
 ## How it works
-The OCR or annotations boxes are rendered page-by-page and word-by-word into
-**SVG images** that have the same dimensions as the page it annotates.
-The **position** of these page SVGs is then **synchronized to the Mirador
-viewport** with dynamic CSS transformations. The implementation of the
-rendering itself is pretty straight-forward and can probably be adapted to
-most "deep zoom" viewers without a lot of additional effort. If you need the
-OCR parsing code as a separate package that you can base an implementation
-for your favorite viewer on, please open an issue :-)
+
+For every page, the plugin renders two stacked SVG layers inside an OSD
+portal:
+
+1. A **rect layer** — one `<rect data-line-key="x_y">` per OCR line.
+   Always mounted (rects are cheap). When `panelVisible` is true it
+   captures pointer events so a click on the image highlights the
+   corresponding panel line and zooms the OSD viewport onto the line;
+   when the panel is hidden the layer becomes `pointer-events: none` so
+   OSD's default click-to-zoom takes over.
+2. A **text layer** — `<text>`/`<tspan>` nodes with `textLength` and
+   `lengthAdjust="spacingAndGlyphs"`. Painted only when `visible` is true
+   or `selectable` is on; controlled by `opacity` (defaults to 0).
+
+The wrapper `<div>` stays unsized (no explicit `width`/`height`) — giving
+it the canvas dimensions plus `willChange: transform` made Chromium
+allocate a per-page compositing layer that exceeded GPU memory on dense
+scans and triggered a SIGILL / black-screen freeze.
+
+The side panel reserves 50% of the viewer width up-front (via the
+styled `ViewerContainer` / `TextContainer` components) so OSD measures
+its container correctly on the very first paint — without this, OSD
+would size itself to the full window before the panel mounts, then fail
+to re-fit once the panel pushes it to half-width.
+
+OSD's default "click to zoom" gesture is suppressed on rect clicks
+through `stopPropagation()` on `pointerdown` / `pointerup` / `click` —
+otherwise OSD would double the magnification every time the user clicks
+a line.
+
+## Possible improvements
+
+Roadmap items, in roughly decreasing impact-vs-effort order:
+
+- **Lazy text-layer mount**: only build the `<text>`/`<tspan>` subtree
+  when `selectable` is on or `opacity > 0`. A previous attempt
+  (display:none on the SVG plus explicit pageWidth/pageHeight on the
+  wrapper) caused a Chromium GPU-layer freeze on dense scans and was
+  reverted — the safe approach is to gate the React subtree without
+  giving the wrapper an explicit size.
+- **Virtualise the side panel** with `react-window` (or equivalent) for
+  manifests with hundreds of OCR lines per canvas. Mounting hundreds of
+  `<button>` nodes synchronously is currently the dominant post-manifest
+  cost.
+- **Defer OCR parsing** through `requestIdleCallback` or a Web Worker.
+  `parseIiifAnnotations` and the hOCR/ALTO parsers run on the main
+  thread; offloading would unblock first paint on dense manifests.
+- **Persist the bubble position** (per-window or per-session) so the
+  user can drag it out of the way of other plugins.
+- **Word-level granularity**: today the panel is line-based. A
+  word-level mode would help search-hit highlighting plug into the same
+  bidirectional flow.
+- **Page color auto-detection**: re-enable `requestColors` lazily (when
+  the user opens the palette) instead of skipping it everywhere when
+  `useAutoColors=false`. Would make the reset button useful as a "back
+  to auto" affordance again.
+- **Theming**: revisit the `::selection` rule that was removed to avoid
+  the Chrome SVG residual-colour bug. A scoped `::selection` (only when
+  text is `visible`) could re-introduce custom selection colours
+  without the post-selection visual leak.
+- **Mobile layout**: the current side panel takes up to 50% of the
+  window width; a bottom-sheet layout would be friendlier on narrow
+  viewports.
+- **i18n coverage**: locales currently cover fr/en/de/it. Mirror new
+  keys (`ocrHelperShowOverlay`, `ocrHelperHideOverlay`,
+  `resetTextColors`, `backgroundColor`, etc.) into upstream Mirador
+  language packs where contributors are willing.
+
+## Differences from `mirador-textoverlay`
+
+- Adds a **side panel** (`MiradorOcrWindowViewer`) listing OCR lines —
+  textoverlay only renders the SVG on the image.
+- Adds **bidirectional click-to-highlight** (image ↔ panel) with OSD
+  zoom-to-line on panel click.
+- The floating settings bubble is **mounted on-demand** through a
+  window-menu entry (`bubbleVisible: false` by default) — textoverlay
+  shows the bubble unconditionally.
+- The text layer is **lazy-mounted** for performance on dense manifests.
+- The colour widget exposes a **manual reset** (not auto-detect-based):
+  it returns to the configured `textColor`/`bgColor` defaults.
 
 ## Contributing
-Found a bug? The plugin is not working with your manifest? Want a new
-feature? Create an issue, or if you want to take a shot at fixing it
-yourself, make a fork, create a pull request, we're always open to
-contributions :-)
 
-For larger changes/features, it's usually wise to open an issue before
-starting the work, so we can discuss if it's a fit.
+Bug reports and pull requests are welcome. For non-trivial changes,
+please open an issue first to discuss scope.
 
-[npm-badge]: https://img.shields.io/npm/v/mirador-textoverlay.png?style=flat-square
-[npm]: https://www.npmjs.org/package/mirador-textoverlay
-
-[mirador-badge]: https://img.shields.io/badge/Mirador-%E2%89%A53.0.0--rc.5-blueviolet 
-[mirador]: https://github.com/ProjectMirador/mirador/releases/tag/v3.0.0-rc.5
-
+[mirador-badge]: https://img.shields.io/badge/Mirador-%E2%89%A54.0.0-blueviolet
+[mirador]: https://github.com/ProjectMirador/mirador/releases
 [screenshot]: .docassets/screenshot.jpg
-[demo]: https://mirador-textoverlay.netlify.com
-[demo-cfg]: https://github.com/dbmdz/mirador-textoverlay/blob/main/demo/src/index.js#L4-L24
-[demo-cfg-catalog]: https://github.com/dbmdz/mirador-textoverlay/blob/main/demo/src/index.js#L5-L13
+[upstream-4eyes]: https://github.com/4eyes/mirador-ocr-helper
+[upstream-dbmdz]: https://github.com/dbmdz/mirador-textoverlay
+[upstream-pr-v4]: https://github.com/dbmdz/mirador-textoverlay/pull/319
