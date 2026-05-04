@@ -62,7 +62,8 @@ function contrast(colorA, colorB) {
 /** Determine foreground and background color from text image. */
 export function getPageColors(imgData) {
   const colors = {};
-  // Data is a flat array containing the image pixels as uint8 RGBA values in the range [0, 255]
+  // Data is a flat array containing the image pixels as uint8 RGBA values in
+  // the range [0, 255]
   for (let i = 0; i < imgData.length - 3; i += 4) {
     const r = imgData[i];
     const g = imgData[i + 1];
@@ -70,18 +71,15 @@ export function getPageColors(imgData) {
     const rgb = `rgb(${r},${g},${b})`;
     colors[rgb] = (colors[rgb] ?? 0) + 1;
   }
-  // Really simple algorithm: The most frequent color is always going to be the text color,
-  // the next most frequent color that has a contrast of at least 7:1 with the text color is
-  // the background. If no background color matches this criterioin, we use black or white,
-  // depending on the text color.
-  // This can and should probably be tweaked with some additional heuristics in the future
-  // (converting to HSL seems worthwhile), but it's good enough for now.
-  // FIXME: Testing with a cairo-backed canvas reveled that this approach relies a lot on
-  //        the implementations in Firefox and Chrome, i.e. we got lucky. Needs more work
-  //        to be more reliable and testable!
+  // Really simple algorithm: The most frequent color is usually going to be the
+  // page background, the next most frequent color that has a contrast of at
+  // least 7:1 with the background is the text color. If no text color matches
+  // this criterion, we fall back to black or white depending on the background
+  // color.
   const sorted = Object.entries(colors).sort(([, freqA], [, freqB]) => freqB - freqA);
-  const color = sorted[0][0];
-  // Add fallback colors to list of candidate colors
-  sorted.push(['rgba(0, 0, 0)', 0], ['rgb(255, 255, 255)', 0]);
-  return { color };
+  const bgColor = sorted[0][0];
+  sorted.push(['rgb(0, 0, 0)', 0], ['rgb(255, 255, 255)', 0]);
+  const found = sorted.slice(1).find(([color]) => contrast(bgColor, color) >= 7);
+  const textColor = found ? found[0] : 'rgb(0, 0, 0)';
+  return { textColor, bgColor };
 }

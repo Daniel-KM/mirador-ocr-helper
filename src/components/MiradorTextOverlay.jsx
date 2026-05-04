@@ -169,7 +169,7 @@ class MiradorTextOverlay extends Component {
 
   /** Push the current highlight state to the right PageTextDisplay via ref. */
   syncHighlightedLine() {
-    const { pageTexts, highlightColor } = this.props;
+    const { pageTexts, bgColor, useAutoColors } = this.props;
     const curr = this.findHighlightedLine(pageTexts);
     const prev = this.lastHighlight;
 
@@ -190,7 +190,8 @@ class MiradorTextOverlay extends Component {
     if (curr) {
       const ref = this.renderRefs[curr.idx];
       if (ref?.current?.highlightLine) {
-        const color = highlightColor || pageTexts[curr.idx]?.color || '#ffeb3b';
+        const pageBg = useAutoColors ? pageTexts[curr.idx]?.bgColor : null;
+        const color = pageBg || bgColor || '#ffeb3b';
         // Use a fixed opacity so the rectangle stays visible even if the
         // text overlay itself is hidden (opacity=0).
         ref.current.highlightLine(curr.line, { color, opacity: 0.5 });

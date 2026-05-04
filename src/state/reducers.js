@@ -81,7 +81,8 @@ export const textsReducer = (state = {}, action) => {
         ...state,
         [action.targetId]: {
           ...state[action.targetId],
-          color: action.color,
+          textColor: action.textColor,
+          bgColor: action.bgColor,
         },
       };
     default:

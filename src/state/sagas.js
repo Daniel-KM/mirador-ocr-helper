@@ -352,8 +352,8 @@ export function* fetchColors({ targetId, infoId }) {
     //        explicitely in the info response instead.
     const imgUrl = `${serviceId}/full/200,/0/default.jpg`;
     const imgData = yield call(loadImageData, imgUrl);
-    const { color } = yield call(getPageColors, imgData);
-    yield put(receiveColors(targetId, color));
+    const { textColor, bgColor } = yield call(getPageColors, imgData);
+    yield put(receiveColors(targetId, textColor, bgColor));
   } catch (error) {
     console.error(error);
     // NOP

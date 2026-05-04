@@ -6,8 +6,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import SubjectIcon from '@mui/icons-material/Subject';
 import OpacityIcon from '@mui/icons-material/Opacity';
 import PaletteIcon from '@mui/icons-material/Palette';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import TextFieldsIcon from '@mui/icons-material/TextFields';
 import TextSelectIcon from '../TextSelectIcon.jsx';
 import CircularProgress from '@mui/material/CircularProgress';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -58,7 +57,8 @@ const OverlaySettings = ({
     visible,
     selectable,
     opacity,
-    color: defaultColor,
+    textColor: defaultTextColor,
+    bgColor: defaultBgColor,
     useAutoColors,
     optionsRenderMode,
   } = windowTextOverlayOptions;
@@ -73,9 +73,12 @@ const OverlaySettings = ({
   const bubbleC = palette.getContrastText(bubbleBg);
   const toggledBubbleBg = alpha(bubbleC, 0.25);
 
-  const color = useAutoColors
-    ? pageColors.map((cs) => cs.color).filter((x) => x)[0] ?? defaultColor
-    : defaultColor;
+  const textColor = useAutoColors
+    ? (pageColors.map((cs) => cs.textColor).filter(Boolean)[0] ?? defaultTextColor)
+    : defaultTextColor;
+  const bgColor = useAutoColors
+    ? (pageColors.map((cs) => cs.bgColor).filter(Boolean)[0] ?? defaultBgColor)
+    : defaultBgColor;
 
   const showAllButtons = open && !textsFetching;
 
@@ -95,7 +98,7 @@ const OverlaySettings = ({
         <ButtonContainer withBorder={!textsFetching && open && isSmallDisplay}>
           <MiradorMenuButton
             containerId={containerId}
-            aria-label={t('overlayVisible')}
+            aria-label={t('textVisible')}
             onClick={() => {
               updateWindowTextOverlayOptions({
                 ...windowTextOverlayOptions,
@@ -104,9 +107,9 @@ const OverlaySettings = ({
             }}
             disabled={textsFetching}
             aria-pressed={visible}
-            style={{ toggledBubbleBg }}
+            style={{ backgroundColor: visible ? toggledBubbleBg : 'transparent' }}
           >
-            {visible ? <VisibilityIcon /> : <VisibilityOffIcon />}
+            <TextFieldsIcon />
           </MiradorMenuButton>
         </ButtonContainer>
       </BubbleContainer>
@@ -143,7 +146,7 @@ const OverlaySettings = ({
             <ButtonContainer withBorder paddingPrev={isSmallDisplay ? 8 : 0} paddingNext={8}>
               <MiradorMenuButton
                 containerId={containerId}
-                aria-label={t('overlayVisible')}
+                aria-label={t('textVisible')}
                 onClick={() => {
                   updateWindowTextOverlayOptions({
                     ...windowTextOverlayOptions,
@@ -157,9 +160,9 @@ const OverlaySettings = ({
                   }
                 }}
                 aria-pressed={visible}
-                style={{ backgroundColor: visible && toggledBubbleBg }}
+                style={{ backgroundColor: visible ? toggledBubbleBg : 'transparent' }}
               >
-                {visible ? <VisibilityIcon /> : <VisibilityOffIcon />}
+                <TextFieldsIcon />
               </MiradorMenuButton>
             </ButtonContainer>
             <ButtonContainer>
@@ -225,7 +228,8 @@ const OverlaySettings = ({
                 <ColorWidget
                   t={t}
                   containerId={containerId}
-                  color={color}
+                  textColor={textColor}
+                  bgColor={bgColor}
                   pageColors={pageColors}
                   useAutoColors={useAutoColors}
                   onChange={(newOpts) =>
@@ -260,7 +264,8 @@ OverlaySettings.propTypes = {
   windowTextOverlayOptions: PropTypes.object.isRequired,
   pageColors: PropTypes.arrayOf(
     PropTypes.shape({
-      color: PropTypes.string,
+      textColor: PropTypes.string,
+      bgColor: PropTypes.string,
     })
   ).isRequired,
 };

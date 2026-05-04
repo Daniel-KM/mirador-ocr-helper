@@ -43,20 +43,33 @@ const Single = styled(ColorInput, {
   },
 }));
 
-const ColorWidget = ({ color, onChange, t, pageColors, useAutoColors, containerId }) => {
+const ColorWidget = ({
+  textColor,
+  bgColor,
+  onChange,
+  t,
+  pageColors,
+  useAutoColors,
+  containerId,
+}) => {
   const showResetButton =
-    !useAutoColors && pageColors && pageColors.some((c) => c && c.color);
+    !useAutoColors &&
+    pageColors &&
+    pageColors.some((c) => c && (c.textColor || c.bgColor));
 
   return (
     <Root className="MuiPaper-elevation4">
       {showResetButton && (
         <MiradorMenuButton
           containerId={containerId}
-          aria-label={t('resetColor')}
+          aria-label={t('resetTextColors')}
           onClick={() =>
             onChange({
               useAutoColors: true,
-              color: pageColors.map((cs) => cs.color).filter((x) => x)[0] ?? color,
+              textColor:
+                pageColors.map((cs) => cs.textColor).filter(Boolean)[0] ?? textColor,
+              bgColor:
+                pageColors.map((cs) => cs.bgColor).filter(Boolean)[0] ?? bgColor,
             })
           }
         >
@@ -64,14 +77,26 @@ const ColorWidget = ({ color, onChange, t, pageColors, useAutoColors, containerI
         </MiradorMenuButton>
       )}
       <Single
-        title={t('color')}
-        autoColors={useAutoColors ? pageColors.map((colors) => colors.color) : undefined}
-        color={color}
+        title={t('textColor')}
+        autoColors={useAutoColors ? pageColors.map((cs) => cs.textColor) : undefined}
+        color={textColor}
         onChange={(newColor) => {
-          if (useAutoColors && newColor === toHexRgb(pageColors?.[0]?.color)) {
+          if (useAutoColors && newColor === toHexRgb(pageColors?.[0]?.textColor)) {
             return;
           }
-          onChange({ color: newColor, useAutoColors: false });
+          onChange({ textColor: newColor, bgColor, useAutoColors: false });
+        }}
+        showResetButton={showResetButton}
+      />
+      <Single
+        title={t('backgroundColor')}
+        autoColors={useAutoColors ? pageColors.map((cs) => cs.bgColor) : undefined}
+        color={bgColor}
+        onChange={(newColor) => {
+          if (useAutoColors && newColor === toHexRgb(pageColors?.[0]?.bgColor)) {
+            return;
+          }
+          onChange({ bgColor: newColor, textColor, useAutoColors: false });
         }}
         showResetButton={showResetButton}
       />
@@ -81,13 +106,15 @@ const ColorWidget = ({ color, onChange, t, pageColors, useAutoColors, containerI
 
 ColorWidget.propTypes = {
   containerId: PropTypes.string.isRequired,
-  color: PropTypes.string.isRequired,
+  textColor: PropTypes.string.isRequired,
+  bgColor: PropTypes.string.isRequired,
   onChange: PropTypes.func.isRequired,
   t: PropTypes.func.isRequired,
   useAutoColors: PropTypes.bool.isRequired,
   pageColors: PropTypes.arrayOf(
     PropTypes.shape({
-      color: PropTypes.string,
+      textColor: PropTypes.string,
+      bgColor: PropTypes.string,
     }),
   ).isRequired,
 };

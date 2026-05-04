@@ -37,7 +37,8 @@ export default [
           ...canvasText.text,
           canvasId: canvasText.canvasId,
           source: canvasText.source,
-          color: canvasText.color,
+          textColor: canvasText.textColor,
+          bgColor: canvasText.bgColor,
         };
       }),
       manifestMetadata: getManifestMetadata(state, { companionWindowId: id, manifestId, windowId }),
@@ -73,7 +74,8 @@ export default [
           ...canvasText.text,
           canvasId: canvasText.canvasId,
           source: canvasText.source,
-          color: canvasText.color,
+          textColor: canvasText.textColor,
+          bgColor: canvasText.bgColor,
         };
       }),
       highlightedLine: getTextsForVisibleCanvases(state, { windowId })
@@ -100,7 +102,6 @@ export default [
         textsAvailable: texts.length > 0,
         textsFetching: texts.some((t) => t?.isFetching),
         pageColors: texts.map((t) => ({
-          color: t?.color,
           textColor: t?.textColor,
           bgColor: t?.bgColor,
         })),

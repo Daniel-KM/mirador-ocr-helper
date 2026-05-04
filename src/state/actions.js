@@ -106,14 +106,15 @@ export function requestColors(targetId, infoId) {
 
 /**
  * receiveColors - action creator
- * @param {string} windowId
  * @param {string} targetId
- * @param {string} color
+ * @param {string} textColor
+ * @param {string} bgColor
  */
-export function receiveColors(targetId, color) {
+export function receiveColors(targetId, textColor, bgColor) {
   return {
     targetId,
-    color,
+    textColor,
+    bgColor,
     type: PluginActionTypes.RECEIVE_COLORS,
   };
 }

@@ -20,8 +20,12 @@ const defaultConfig = {
   selectable: false,
   // Try to automatically determine the text and background color
   useAutoColors: false,
-  // Color of rendered box, used as a fallback if auto-detection is enabled and fails
-  color: '#00FF7B',
+  // Color of rendered text, used as a fallback if auto-detection is enabled and
+  // fails
+  textColor: '#000000',
+  // Color of line background / highlight rect, used as a fallback if
+  // auto-detection is enabled and fails
+  bgColor: '#00FF7B',
   // Skip empty lines
   skipEmptyLines: true,
   // If enabled, the user can submit corrections to the text via email

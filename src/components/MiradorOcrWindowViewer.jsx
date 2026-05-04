@@ -259,7 +259,7 @@ class MiradorOcrWindowViewer extends Component {
                     key={`line_${line.x}_${line.y}`}
                   >
                     <LineWrap
-                      lineColor={page.color}
+                      lineColor={page.bgColor}
                       lineOpacity={opacity}
                       isHighlighted={!!line.isHighlighted}
                     >
