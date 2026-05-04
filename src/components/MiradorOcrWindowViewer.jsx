@@ -170,7 +170,8 @@ class MiradorOcrWindowViewer extends Component {
         ? 'scrollIntoView'
         : null;
     if (method) {
-      element[method]({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      const behavior = this.props.panelScrollBehavior || 'smooth';
+      element[method]({ behavior, block: 'nearest', inline: 'nearest' });
     }
   }
 
@@ -318,6 +319,7 @@ MiradorOcrWindowViewer.propTypes = {
   textsAvailable: PropTypes.bool,
   textsFetching: PropTypes.bool,
   panelVisible: PropTypes.bool,
+  panelScrollBehavior: PropTypes.oneOf(['smooth', 'instant', 'auto']),
   windowId: PropTypes.string.isRequired,
   TargetComponent: PropTypes.elementType,
   targetProps: PropTypes.object,

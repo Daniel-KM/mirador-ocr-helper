@@ -46,6 +46,12 @@ const defaultConfig = {
   // Whether the side OCR panel (right column listing the OCR lines) is
   // rendered. Toggled from the WindowTopBarPluginMenu entry.
   panelVisible: true,
+  // Scroll animation when the side OCR panel jumps to a highlighted line.
+  // Accepts the native scrollIntoView() behavior values: 'smooth' (default),
+  // 'instant' (no animation), or 'auto' (defer to the user agent / parent
+  // CSS). Surface this in the Mirador config to swap to 'instant' on dense
+  // manifests where the ~300ms animation feels sluggish.
+  panelScrollBehavior: 'smooth',
 };
 
 /** Selector to get text display options for a given window */

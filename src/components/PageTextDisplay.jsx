@@ -38,6 +38,13 @@ class PageTextDisplay extends React.Component {
     // For mobile Safari <= 12.2
     this.textContainerRef.current.addEventListener('touchstart', this.onPointerDown);
     if (this.boxContainerRef.current) {
+      // OSD's MouseTracker listens for pointerdown on its container; if we
+      // let the event bubble past us, OSD reads it as "click-to-zoom" and
+      // doubles the magnification on top of our highlight dispatch. Swallow
+      // the pointer phases on rects (only when actually over a line) so OSD
+      // never sees them.
+      this.boxContainerRef.current.addEventListener('pointerdown', this.onBoxPointerDown);
+      this.boxContainerRef.current.addEventListener('pointerup', this.onBoxPointerDown);
       this.boxContainerRef.current.addEventListener('click', this.onBoxClick);
     }
   }
@@ -49,9 +56,19 @@ class PageTextDisplay extends React.Component {
       this.textContainerRef.current.removeEventListener('touchstart', this.onPointerDown);
     }
     if (this.boxContainerRef.current) {
+      this.boxContainerRef.current.removeEventListener('pointerdown', this.onBoxPointerDown);
+      this.boxContainerRef.current.removeEventListener('pointerup', this.onBoxPointerDown);
       this.boxContainerRef.current.removeEventListener('click', this.onBoxClick);
     }
   }
+
+  /** Stop pointer events on line rects from reaching OSD, otherwise the
+   * default click-to-zoom kicks in alongside our highlight. */
+  onBoxPointerDown = (evt) => {
+    if (evt.target && evt.target.closest && evt.target.closest('rect[data-line-key]')) {
+      evt.stopPropagation();
+    }
+  };
 
   /** Forward a click on a line rect to the parent so it can dispatch the
    * highlight action (with initiator='image' so the OCR panel scrolls). */
@@ -63,6 +80,7 @@ class PageTextDisplay extends React.Component {
     if (!rect) {
       return;
     }
+    evt.stopPropagation();
     const key = rect.getAttribute('data-line-key');
     const line = (this.props.lines || []).find((l) => `${l.x}_${l.y}` === key);
     if (line) {
