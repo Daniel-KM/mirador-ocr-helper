@@ -12,7 +12,7 @@ const Root = styled('div')(({ theme }) => {
     backgroundColor: fade(bubbleBg, 0.8),
     borderRadius: '0 0 25px 25px',
     height: 150,
-    padding: '16px 8px 8px 8px',
+    padding: '16px 8px 24px 8px',
     position: 'absolute',
     top: 48,
     zIndex: 100,
@@ -25,6 +25,7 @@ const Root = styled('div')(({ theme }) => {
       clipPath: 'inset(-8px 0 -8px -8px)',
       paddingTop: 12,
       paddingBottom: 2,
+      paddingRight: 24,
     },
   };
 });

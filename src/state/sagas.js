@@ -64,9 +64,8 @@ export async function fetchOcrMarkup(url) {
 
 /** Saga for discovering external OCR on visible canvases and requesting it if not yet loaded */
 export function* discoverExternalOcr({ visibleCanvases: visibleCanvasIds, windowId }) {
-  const { enabled, visible } = (yield select(getWindowConfig, { windowId }))?.textOverlay ?? {
-    enabled: false,
-  };
+  const { enabled, visible, useAutoColors } =
+    (yield select(getWindowConfig, { windowId }))?.textOverlay ?? { enabled: false };
   if (!enabled) {
     return;
   }
@@ -93,14 +92,19 @@ export function* discoverExternalOcr({ visibleCanvases: visibleCanvasIds, window
       } else {
         yield put(discoveredText(canvas.id, ocrSource));
       }
-      // Get the IIIF Image Service from the canvas to determine text/background colors
-      // NOTE: We don't do this in the `fetchColors` saga, since it's kind of a pain to get
-      // a canvas object from an id, and we have one already here, so it's just simpler.
+      // Auto-detected page colors require fetching a downsized JPEG and running
+      // a pixel histogram on the main thread. Skip the whole round-trip when
+      // the user has not opted in (useAutoColors=false is the default),
+      // otherwise a slow IIIF image service can stall the saga and visibly
+      // delay Mirador's first paint.
+      if (!useAutoColors) {
+        continue;
+      }
       const miradorCanvas = new MiradorCanvas(canvas);
       const image = miradorCanvas.iiifImageResources[0];
       const infoId = image?.getServices()[0].id;
       if (!infoId) {
-        return;
+        continue;
       }
       yield put(requestColors(canvas.id, infoId));
     }

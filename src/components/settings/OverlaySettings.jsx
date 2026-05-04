@@ -15,6 +15,7 @@ import { styled, useTheme, alpha } from '@mui/material/styles';
 import ButtonContainer from './ButtonContainer.jsx';
 import OpacityWidget from './OpacityWidget.jsx';
 import ColorWidget from './ColorWidget.jsx';
+import { DEFAULT_TEXT_COLOR, DEFAULT_BG_COLOR } from '../../state/selectors';
 
 const BubbleContainer = styled('div', {
   shouldForwardProp: (p) =>
@@ -231,6 +232,8 @@ const OverlaySettings = ({
                   containerId={containerId}
                   textColor={textColor}
                   bgColor={bgColor}
+                  defaultTextColor={DEFAULT_TEXT_COLOR}
+                  defaultBgColor={DEFAULT_BG_COLOR}
                   pageColors={pageColors}
                   useAutoColors={useAutoColors}
                   onChange={(newOpts) =>

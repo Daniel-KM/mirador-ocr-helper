@@ -3,14 +3,11 @@ import PropTypes from 'prop-types';
 import { alpha as fade, useTheme } from '@mui/material/styles';
 import { styled } from '@mui/material/styles';
 
-const OverlaySvg = styled('svg', { shouldForwardProp: (p) => p !== 'overlayTheme' })(({ overlayTheme }) => ({
-  fontFamily: overlayTheme?.overlayFont ?? 'sans-serif',
-  '& ::selection': {
-    fill: overlayTheme?.selectionTextColor ?? 'rgba(255, 255, 255, 1)',
-    color: overlayTheme?.selectionTextColor ?? 'rgba(255, 255, 255, 1)',
-    backgroundColor: overlayTheme?.selectionBackgroundColor ?? 'rgba(0, 55, 255, 1)',
-  },
-}));
+const OverlaySvg = styled('svg', { shouldForwardProp: (p) => p !== 'overlayTheme' })(
+  ({ overlayTheme }) => ({
+    fontFamily: overlayTheme?.overlayFont ?? 'sans-serif',
+  }),
+);
 
 /** Check if we're running in Gecko */
 function runningInGecko() {
@@ -157,14 +154,16 @@ class PageTextDisplay extends React.Component {
     const textSvg = this.textContainerRef.current.parentElement;
     textSvg.style.userSelect = selectable ? 'text' : 'none';
     textSvg.style.cursor = selectable ? 'text' : 'default';
+    // The text SVG sits on top; let it capture events only when the user
+    // wants to select text. Otherwise pointer events fall through to the
+    // rect SVG below, which drives the click-to-highlight affordance.
+    textSvg.style.pointerEvents = selectable ? 'auto' : 'none';
     if (this.boxContainerRef.current) {
       const rectSvg = this.boxContainerRef.current.parentElement;
       rectSvg.style.cursor = selectable ? 'text' : 'default';
-      const cursor = selectable ? 'text' : 'pointer';
-      const pe = selectable ? 'none' : 'fill';
       for (const rect of this.boxContainerRef.current.querySelectorAll('rect')) {
-        rect.style.cursor = cursor;
-        rect.style.pointerEvents = pe;
+        rect.style.cursor = selectable ? 'text' : 'pointer';
+        rect.style.pointerEvents = 'fill';
       }
     }
   }
@@ -260,16 +259,14 @@ class PageTextDisplay extends React.Component {
     // is forced visible (e.g. when a single line is highlighted from the OCR
     // panel).
     const renderOpacity = visible ? opacity : 0;
-    // pointerEvents: 'fill' makes a transparent rect still receive clicks,
-    // which is required because the panel-to-image highlight uses
-    // `fill: rgba(_,0)` as the default. When text selection is enabled, we
-    // step out of the way: 'none' lets pointer events fall through to the
-    // <text> nodes (so the browser shows an I-beam and selection works);
-    // otherwise we keep the rect clickable with a pointer cursor to expose
-    // the highlight affordance.
+    // The rect SVG sits below a topmost text SVG. To make panel-to-image
+    // clicks reach the rect, we keep `pointerEvents: 'fill'` here and turn
+    // the text layer transparent to pointer events when text selection is
+    // off (see svgStyle below). When selection is on, the text layer
+    // captures events instead so the browser can drive caret placement.
     const boxStyle = {
       fill: fade(bg, renderOpacity),
-      pointerEvents: selectable ? 'none' : 'fill',
+      pointerEvents: 'fill',
       cursor: selectable ? 'text' : 'pointer',
     };
     const textStyle = {
@@ -330,7 +327,14 @@ class PageTextDisplay extends React.Component {
             ))}
           </g>
         </svg>
-        <OverlaySvg overlayTheme={overlayTheme} style={{ ...svgStyle, position: 'absolute' }}>
+        <OverlaySvg
+          overlayTheme={overlayTheme}
+          style={{
+            ...svgStyle,
+            position: 'absolute',
+            pointerEvents: selectable ? 'auto' : 'none',
+          }}
+        >
           <g ref={this.textContainerRef}>
             {renderLines.map((line) =>
               line.spans ? (

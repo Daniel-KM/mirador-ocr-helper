@@ -7,6 +7,9 @@ import {
 } from 'mirador';
 import { miradorSlice } from 'mirador';
 
+export const DEFAULT_TEXT_COLOR = '#000000';
+export const DEFAULT_BG_COLOR = '#00FF7B';
+
 const defaultConfig = {
   // Enable the text selection and display feature
   enabled: true,
@@ -22,10 +25,10 @@ const defaultConfig = {
   useAutoColors: false,
   // Color of rendered text, used as a fallback if auto-detection is enabled and
   // fails
-  textColor: '#000000',
+  textColor: DEFAULT_TEXT_COLOR,
   // Color of line background / highlight rect, used as a fallback if
   // auto-detection is enabled and fails
-  bgColor: '#00FF7B',
+  bgColor: DEFAULT_BG_COLOR,
   // Skip empty lines
   skipEmptyLines: true,
   // If enabled, the user can submit corrections to the text via email
