@@ -326,6 +326,11 @@ class MiradorTextOverlay extends Component {
         ref={this.containerRef}
         style={{
           position: 'absolute',
+          // The wrapper has no own hit area: let pointer/wheel events fall
+          // through to OSD (zoom, pan) by default. Individual <rect> nodes
+          // re-enable pointer-events:fill on themselves so the click-to-
+          // highlight affordance still works on top of the line boxes.
+          pointerEvents: 'none',
           // Force the wrapper visible when a line is highlighted so the
           // imperatively-styled <rect> shows up even if the user has not
           // enabled the text overlay (typical case: only the OCR panel is

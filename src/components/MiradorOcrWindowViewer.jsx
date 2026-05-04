@@ -12,27 +12,34 @@ const Wrap = styled('div')({
   width: '100%',
 });
 
-const ViewerContainer = styled('div')({
+const ViewerContainer = styled('div', {
+  shouldForwardProp: (p) => p !== 'panelVisible',
+})(({ panelVisible }) => ({
   position: 'relative',
   display: 'flex',
-  flex: 1,
-});
+  flex: panelVisible ? '0 0 50%' : 1,
+  width: panelVisible ? '50%' : '100%',
+  maxWidth: panelVisible ? '50%' : '100%',
+  height: '100%',
+}));
 
 const TextContainer = styled('div', {
   shouldForwardProp: (p) => !['textsAvailable', 'visible'].includes(p),
 })(({ textsAvailable, visible }) => ({
   fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
   zIndex: 1,
-  flex: '0 0 auto',
+  flex: visible ? '0 0 50%' : '0 0 auto',
   backgroundColor: '#ffffff',
   padding: '0.75rem',
   boxSizing: 'border-box',
+  width: visible ? '50%' : 0,
   maxWidth: '50%',
   height: '100%',
   overflowY: 'auto',
   scrollBehavior: 'smooth',
-  borderLeft: `2px solid ${alpha('#000000', 0.15)}`,
-  display: textsAvailable && visible ? null : 'none',
+  borderLeft: visible ? `2px solid ${alpha('#000000', 0.15)}` : 'none',
+  visibility: textsAvailable && visible ? 'visible' : 'hidden',
+  display: visible ? 'block' : 'none',
 }));
 
 const Paragraph = styled('div')({
@@ -235,7 +242,7 @@ class MiradorOcrWindowViewer extends Component {
 
     return (
       <Wrap>
-        <ViewerContainer>
+        <ViewerContainer panelVisible={panelVisible !== false}>
           {TargetComponent && <TargetComponent {...targetProps} />}
         </ViewerContainer>
         <TextContainer
