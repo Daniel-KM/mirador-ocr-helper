@@ -196,10 +196,52 @@ class MiradorTextOverlay extends Component {
         // text overlay itself is hidden (opacity=0).
         ref.current.highlightLine(curr.line, { color, opacity: 0.5 });
       }
+      if (curr.line.initiator === 'text') {
+        this.zoomToLine(curr.idx, curr.line);
+      }
     }
 
     if (!!curr !== this.state.hasHighlight) {
       this.setState({ hasHighlight: !!curr });
+    }
+  }
+
+  /** Pan + zoom the OSD viewport so the line is centered with some padding.
+   *
+   * Triggered when the user clicks a line in the side OCR panel — gives a
+   * "jump to this passage" feel rather than just dropping a faint highlight
+   * far away from the current view.
+   */
+  zoomToLine(idx, line) {
+    const { viewer } = this.props;
+    if (!viewer || !line) return;
+    const item = viewer.world.getItemAt(idx);
+    const viewport = viewer.viewport;
+    if (!item || !viewport || typeof viewport.imageToViewportRectangle !== 'function') {
+      return;
+    }
+    // Pad in image-space, then convert through the viewport (which knows
+    // both the tiled image and the world layout). OSD's TiledImage
+    // .imageToViewportRectangle does not always do the normalization we
+    // need; viewport.imageToViewportRectangle is reliable for a single
+    // tiled image at world index 0.
+    const pad = line.height * 1.5;
+    const padded = viewport.imageToViewportRectangle(
+      line.x - pad,
+      line.y - pad,
+      line.width + pad * 2,
+      line.height + pad * 2,
+    );
+    if (!padded) return;
+    try {
+      if (typeof viewport.fitBoundsWithConstraints === 'function') {
+        viewport.fitBoundsWithConstraints(padded);
+      } else {
+        viewport.fitBounds(padded);
+      }
+    } catch (_e) {
+      // Bounds outside the source dimensions; skip silently rather than
+      // throwing in the middle of a Redux callback.
     }
   }
 

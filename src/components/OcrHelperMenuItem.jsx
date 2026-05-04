@@ -11,15 +11,22 @@ const OcrHelperMenuItem = ({
   handleClose,
   textsAvailable = false,
   updateWindowTextOverlayOptions,
+  windowTextOverlayOptions = {},
 }) => {
   const { t } = useTranslation();
 
   const handleClick = () => {
     handleClose();
     const next = !bubbleVisible;
-    // Mirror `enabled` so neighbouring plugins (e.g. mirador-rotation) that
-    // peek at cfg.textOverlay.enabled can stack their bubble below ours.
-    updateWindowTextOverlayOptions({ bubbleVisible: next, enabled: next });
+    // Merge with the current overlay options so we don't clobber unrelated
+    // keys (visible/opacity/selectable/…). Mirror `enabled` so neighbouring
+    // plugins (e.g. mirador-rotation) that peek at cfg.textOverlay.enabled
+    // can stack their bubble below ours.
+    updateWindowTextOverlayOptions({
+      ...windowTextOverlayOptions,
+      bubbleVisible: next,
+      enabled: next,
+    });
   };
 
   return (
@@ -39,6 +46,8 @@ OcrHelperMenuItem.propTypes = {
   handleClose: PropTypes.func.isRequired,
   textsAvailable: PropTypes.bool,
   updateWindowTextOverlayOptions: PropTypes.func.isRequired,
+  // eslint-disable-next-line react/forbid-prop-types
+  windowTextOverlayOptions: PropTypes.object,
 };
 
 export default OcrHelperMenuItem;

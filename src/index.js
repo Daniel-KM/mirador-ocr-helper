@@ -123,6 +123,7 @@ export default [
       return {
         bubbleVisible: !!opts.bubbleVisible,
         textsAvailable: texts.length > 0,
+        windowTextOverlayOptions: opts,
       };
     },
     mapDispatchToProps: (dispatch, { windowId }) => ({

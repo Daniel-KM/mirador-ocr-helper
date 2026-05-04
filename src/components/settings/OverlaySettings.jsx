@@ -1,5 +1,5 @@
 /* eslint-disable jsx-a11y/label-has-associated-control */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import { MiradorMenuButton, useTranslation } from 'mirador';
 import CloseIcon from '@mui/icons-material/Close';
@@ -64,7 +64,14 @@ const OverlaySettings = ({
     optionsRenderMode,
     bubbleVisible,
   } = windowTextOverlayOptions;
-  const [open, setOpen] = useState(enabled && visible);
+  const [open, setOpen] = useState(enabled && (visible || selectable || bubbleVisible));
+  // The component stays mounted across show/hide cycles (the early null
+  // return below keeps it in the React tree), so useState's initial value
+  // only fires once. Re-expand whenever the user requests the bubble from
+  // the menu (bubbleVisible flips to true).
+  useEffect(() => {
+    if (bubbleVisible) setOpen(true);
+  }, [bubbleVisible]);
   const [showOpacitySlider, setShowOpacitySlider] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const theme = useTheme();
