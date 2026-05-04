@@ -36,6 +36,13 @@ const defaultConfig = {
   },
   // Render mode for text overlay options
   optionsRenderMode: 'complex',
+  // Whether the floating OverlaySettings bubble (Tt, I, opacity, palette,
+  // collapse) is rendered on top of the OpenSeadragon viewer. Toggled from the
+  // WindowTopBarPluginMenu entry.
+  bubbleVisible: false,
+  // Whether the side OCR panel (right column listing the OCR lines) is
+  // rendered. Toggled from the WindowTopBarPluginMenu entry.
+  panelVisible: true,
 };
 
 /** Selector to get text display options for a given window */

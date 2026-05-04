@@ -221,7 +221,7 @@ class MiradorOcrWindowViewer extends Component {
       textsAvailable,
       textsFetching,
       doHighlightLine,
-      visible,
+      panelVisible,
       opacity,
       t,
       TargetComponent,
@@ -241,7 +241,7 @@ class MiradorOcrWindowViewer extends Component {
         <TextContainer
           className="ocr-container"
           textsAvailable={textsAvailable}
-          visible={visible !== false}
+          visible={panelVisible !== false}
         >
           {textsAvailable &&
             !textsFetching &&
@@ -310,7 +310,7 @@ MiradorOcrWindowViewer.propTypes = {
   t: PropTypes.func.isRequired,
   textsAvailable: PropTypes.bool,
   textsFetching: PropTypes.bool,
-  visible: PropTypes.bool,
+  panelVisible: PropTypes.bool,
   windowId: PropTypes.string.isRequired,
   TargetComponent: PropTypes.elementType,
   targetProps: PropTypes.object,

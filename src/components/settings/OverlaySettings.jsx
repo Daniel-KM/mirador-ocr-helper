@@ -61,6 +61,7 @@ const OverlaySettings = ({
     bgColor: defaultBgColor,
     useAutoColors,
     optionsRenderMode,
+    bubbleVisible,
   } = windowTextOverlayOptions;
   const [open, setOpen] = useState(enabled && visible);
   const [showOpacitySlider, setShowOpacitySlider] = useState(false);
@@ -82,7 +83,7 @@ const OverlaySettings = ({
 
   const showAllButtons = open && !textsFetching;
 
-  if (!enabled || !textsAvailable) {
+  if (!enabled || !textsAvailable || !bubbleVisible) {
     return null;
   }
 

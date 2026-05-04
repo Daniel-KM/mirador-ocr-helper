@@ -15,6 +15,8 @@ export default {
     textColor: 'Textfarbe',
     backgroundColor: 'Hintergrundfarbe',
     resetTextColors: 'Textfarben zurücksetzen',
+    ocrHelperShowOverlay: 'Text-Overlay anzeigen',
+    ocrHelperHideOverlay: 'Text-Overlay ausblenden',
     ocrCorrectionTooltip: 'Fehler melden',
     ocrCorrectionSubject: 'Verbesserung OCR-Text',
     ocrCorrectionBody: `
@@ -50,6 +52,8 @@ Zeile:
     textColor: 'Couleur du texte',
     backgroundColor: 'Couleur de fond',
     resetTextColors: 'Réinitialiser les couleurs',
+    ocrHelperShowOverlay: 'Afficher la barre OCR',
+    ocrHelperHideOverlay: 'Masquer la barre OCR',
     // Keys provided by mirador-textoverlay; we mirror them here so the French
     // translation wins when the two plugins are loaded together.
     textSelect: 'Sélection du texte',
@@ -95,6 +99,8 @@ Ligne :
     textColor: 'Colore del testo',
     backgroundColor: 'Colore di sfondo',
     resetTextColors: 'Ripristina i colori',
+    ocrHelperShowOverlay: 'Mostra barra OCR',
+    ocrHelperHideOverlay: 'Nascondi barra OCR',
     ocrCorrectionTooltip: 'Segnala errore',
     ocrCorrectionSubject: 'Correzione del testo OCR',
     ocrCorrectionBody: `
@@ -134,6 +140,8 @@ Riga:
     textColor: 'Text color',
     backgroundColor: 'Background color',
     resetTextColors: 'Reset text colors',
+    ocrHelperShowOverlay: 'Show text overlay',
+    ocrHelperHideOverlay: 'Hide text overlay',
     ocrCorrectionTooltip: 'Report error',
     ocrCorrectionSubject: 'Improvement to OCR text',
     ocrCorrectionBody: `

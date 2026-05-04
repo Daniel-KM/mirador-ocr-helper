@@ -12,6 +12,7 @@ import textSaga from './state/sagas';
 import { getTextsForVisibleCanvases, getWindowTextOverlayOptions } from './state/selectors';
 import MiradorTextOverlay from './components/MiradorTextOverlay.jsx';
 import MiradorOcrWindowViewer from './components/MiradorOcrWindowViewer.jsx';
+import OcrHelperMenuItem from './components/OcrHelperMenuItem.jsx';
 import OverlaySettings from './components/settings/OverlaySettings.jsx';
 // This plugin is fully self-contained: it ships its own OverlaySettings bubble
 // (visibility / text selection / opacity / palette / collapse) on the
@@ -105,6 +106,23 @@ export default [
           textColor: t?.textColor,
           bgColor: t?.bgColor,
         })),
+      };
+    },
+    mapDispatchToProps: (dispatch, { windowId }) => ({
+      updateWindowTextOverlayOptions: (newOptions) =>
+        dispatch(updateWindow(windowId, { textOverlay: newOptions })),
+    }),
+  },
+  {
+    component: OcrHelperMenuItem,
+    target: 'WindowTopBarPluginMenu',
+    mode: 'add',
+    mapStateToProps: (state, { windowId }) => {
+      const opts = getWindowTextOverlayOptions(state, { windowId });
+      const texts = getTextsForVisibleCanvases(state, { windowId });
+      return {
+        bubbleVisible: !!opts.bubbleVisible,
+        textsAvailable: texts.length > 0,
       };
     },
     mapDispatchToProps: (dispatch, { windowId }) => ({
