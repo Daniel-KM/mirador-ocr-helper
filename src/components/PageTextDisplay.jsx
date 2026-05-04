@@ -63,8 +63,13 @@ class PageTextDisplay extends React.Component {
   }
 
   /** Stop pointer events on line rects from reaching OSD, otherwise the
-   * default click-to-zoom kicks in alongside our highlight. */
+   * default click-to-zoom kicks in alongside our highlight. Skip when the
+   * side panel is hidden — without it, the highlight has no observable
+   * effect, so let OSD handle the click natively. */
   onBoxPointerDown = (evt) => {
+    if (!this.props.clickable) {
+      return;
+    }
     if (evt.target && evt.target.closest && evt.target.closest('rect[data-line-key]')) {
       evt.stopPropagation();
     }
@@ -73,7 +78,7 @@ class PageTextDisplay extends React.Component {
   /** Forward a click on a line rect to the parent so it can dispatch the
    * highlight action (with initiator='image' so the OCR panel scrolls). */
   onBoxClick = (evt) => {
-    if (!this.props.onLineClick) {
+    if (!this.props.clickable || !this.props.onLineClick) {
       return;
     }
     const rect = evt.target && evt.target.closest && evt.target.closest('rect[data-line-key]');
@@ -95,8 +100,9 @@ class PageTextDisplay extends React.Component {
    * but this *seriously* helps with performance.
    */
   shouldComponentUpdate(nextProps) {
-    const { source } = this.props;
-    return nextProps.source !== source;
+    const { source, clickable } = this.props;
+    if (nextProps.source !== source) return true;
+    return Boolean(clickable) !== Boolean(nextProps.clickable);
   }
 
   /** Swallow pointer events if selection is enabled */
@@ -282,10 +288,14 @@ class PageTextDisplay extends React.Component {
     // the text layer transparent to pointer events when text selection is
     // off (see svgStyle below). When selection is on, the text layer
     // captures events instead so the browser can drive caret placement.
+    const clickable = this.props.clickable !== false;
     const boxStyle = {
       fill: fade(bg, renderOpacity),
-      pointerEvents: 'fill',
-      cursor: selectable ? 'text' : 'pointer',
+      // When the panel is hidden, let pointer events fall through to OSD
+      // (default click-to-zoom). When visible, we capture them for the
+      // image-to-panel highlight.
+      pointerEvents: clickable ? 'fill' : 'none',
+      cursor: selectable ? 'text' : clickable ? 'pointer' : 'default',
     };
     const textStyle = {
       fill: fade(fg, renderOpacity),

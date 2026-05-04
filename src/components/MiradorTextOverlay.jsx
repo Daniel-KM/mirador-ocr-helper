@@ -317,10 +317,16 @@ class MiradorTextOverlay extends Component {
       useAutoColors,
       fontFamily,
       doHighlightLine,
+      panelVisible,
     } = this.props;
     if (!this.shouldRender() || !viewer || !pageTexts) {
       return null;
     }
+    // Rects only need to capture clicks when the side panel is actually
+    // visible — that's the only place the image-to-panel highlight is
+    // observable. Otherwise let OSD receive the click so its default
+    // click-to-zoom behaviour kicks in.
+    const rectClickable = panelVisible !== false && visible !== false;
     return createPortal(
       <div
         ref={this.containerRef}
@@ -365,6 +371,7 @@ class MiradorTextOverlay extends Component {
               fontFamily={fontFamily}
               bgColor={bgColor}
               useAutoColors={useAutoColors}
+              clickable={rectClickable}
               onLineClick={(line) => {
                 if (doHighlightLine && page.canvasId) {
                   doHighlightLine(page.canvasId, line, 'image');
@@ -392,6 +399,7 @@ MiradorTextOverlay.propTypes = {
   fontFamily: PropTypes.oneOfType([PropTypes.string, PropTypes.arrayOf(PropTypes.string)]),
   bgColor: PropTypes.string,
   useAutoColors: PropTypes.bool,
+  panelVisible: PropTypes.bool,
 };
 
 MiradorTextOverlay.defaultProps = {
