@@ -3,6 +3,7 @@ export const PluginActionTypes = {
   RECEIVE_TEXT: 'mirador-textoverlay/RECEIVE_TEXT',
   RECEIVE_TEXT_FAILURE: 'mirador-textoverlay/RECEIVE_TEXT_FAILURE',
   REQUEST_TEXT: 'mirador-textoverlay/REQUEST_TEXT',
+  HIGHLIGHT_LINE: 'mirador-textoverlay/HIGHLIGHT_LINE',
   REQUEST_COLORS: 'mirador-textoverlay/REQUEST_COLORS',
   RECEIVE_COLORS: 'mirador-textoverlay/RECEIVE_COLORS',
 };
@@ -75,6 +76,22 @@ export function receiveTextFailure(targetId, textUri, error) {
 }
 
 /**
+ * highlightLine: action creator
+ *
+ * @param {String} targetId
+ * @param {object} line
+ * @param {String} initiator
+ */
+ export function highlightLine(targetId, line, initiator) {
+  return {
+    targetId,
+    line,
+    initiator,
+    type: PluginActionTypes.HIGHLIGHT_LINE,
+  };
+}
+
+/**
  * requestColors - action creator
  * @param {string} targetId
  * @param {string} infoId
@@ -91,14 +108,12 @@ export function requestColors(targetId, infoId) {
  * receiveColors - action creator
  * @param {string} windowId
  * @param {string} targetId
- * @param {string} textColor
- * @param {string} bgColor
+ * @param {string} color
  */
-export function receiveColors(targetId, textColor, bgColor) {
+export function receiveColors(targetId, color) {
   return {
     targetId,
-    textColor,
-    bgColor,
+    color,
     type: PluginActionTypes.RECEIVE_COLORS,
   };
 }

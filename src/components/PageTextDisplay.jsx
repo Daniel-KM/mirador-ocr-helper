@@ -1,6 +1,16 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { fade } from '@material-ui/core/styles/colorManipulator';
+import { alpha as fade, useTheme } from '@mui/material/styles';
+import { styled } from '@mui/material/styles';
+
+const OverlaySvg = styled('svg', { shouldForwardProp: (p) => p !== 'overlayTheme' })(({ overlayTheme }) => ({
+  fontFamily: overlayTheme?.overlayFont ?? 'sans-serif',
+  '& ::selection': {
+    fill: overlayTheme?.selectionTextColor ?? 'rgba(255, 255, 255, 1)',
+    color: overlayTheme?.selectionTextColor ?? 'rgba(255, 255, 255, 1)',
+    backgroundColor: overlayTheme?.selectionBackgroundColor ?? 'rgba(0, 55, 255, 1)',
+  },
+}));
 
 /** Check if we're running in Gecko */
 function runningInGecko() {
@@ -21,6 +31,7 @@ class PageTextDisplay extends React.Component {
     this.containerRef = React.createRef();
     this.textContainerRef = React.createRef();
     this.boxContainerRef = React.createRef();
+    this.highlightedRect = null;
   }
 
   /** Register pointerdown handler on SVG container */
@@ -29,7 +40,38 @@ class PageTextDisplay extends React.Component {
     this.textContainerRef.current.addEventListener('pointerdown', this.onPointerDown);
     // For mobile Safari <= 12.2
     this.textContainerRef.current.addEventListener('touchstart', this.onPointerDown);
+    if (this.boxContainerRef.current) {
+      this.boxContainerRef.current.addEventListener('click', this.onBoxClick);
+    }
   }
+
+  /** Detach handlers on unmount. */
+  componentWillUnmount() {
+    if (this.textContainerRef.current) {
+      this.textContainerRef.current.removeEventListener('pointerdown', this.onPointerDown);
+      this.textContainerRef.current.removeEventListener('touchstart', this.onPointerDown);
+    }
+    if (this.boxContainerRef.current) {
+      this.boxContainerRef.current.removeEventListener('click', this.onBoxClick);
+    }
+  }
+
+  /** Forward a click on a line rect to the parent so it can dispatch the
+   * highlight action (with initiator='image' so the OCR panel scrolls). */
+  onBoxClick = (evt) => {
+    if (!this.props.onLineClick) {
+      return;
+    }
+    const rect = evt.target && evt.target.closest && evt.target.closest('rect[data-line-key]');
+    if (!rect) {
+      return;
+    }
+    const key = rect.getAttribute('data-line-key');
+    const line = (this.props.lines || []).find((l) => `${l.x}_${l.y}` === key);
+    if (line) {
+      this.props.onLineClick(line);
+    }
+  };
 
   /** Only update the component when the source changed (i.e. we need to re-render the text).
    *
@@ -85,6 +127,13 @@ class PageTextDisplay extends React.Component {
     // one of the containers, since otherwise the user's selection highlight would
     // become transparent as well or disappear entirely.
     for (const rect of this.boxContainerRef.current.querySelectorAll('rect')) {
+      // Skip the currently highlighted rect to preserve its color, but
+      // refresh the cached original fill so a later clear restores the
+      // up-to-date background.
+      if (rect.classList.contains('ocr-line-highlighted')) {
+        this.highlightedRectOriginalFill = fade(bgColor, opacity);
+        continue;
+      }
       rect.style.fill = fade(bgColor, opacity);
     }
     for (const text of this.textContainerRef.current.querySelectorAll('text')) {
@@ -103,6 +152,52 @@ class PageTextDisplay extends React.Component {
     this.textContainerRef.current.parentElement.style.userSelect = selectable ? 'text' : 'none';
   }
 
+  /** Highlight a single line rectangle in the OSD overlay.
+   *
+   * Called imperatively by the parent because shouldComponentUpdate blocks
+   * normal prop-driven re-renders. Pass null to clear.
+   */
+  highlightLine(line, options = {}) {
+    if (!this.boxContainerRef.current) {
+      return;
+    }
+    if (this.highlightedRect) {
+      this.highlightedRect.classList.remove('ocr-line-highlighted');
+      // Restore the original inline fill so we don't fall through to the
+      // SVG default `fill: black` when removing the inline style.
+      if (this.highlightedRectOriginalFill !== undefined) {
+        this.highlightedRect.style.fill = this.highlightedRectOriginalFill;
+      } else {
+        this.highlightedRect.style.removeProperty('fill');
+      }
+      this.highlightedRect.style.removeProperty('stroke');
+      this.highlightedRect.style.removeProperty('stroke-width');
+      this.highlightedRect = null;
+      this.highlightedRectOriginalFill = undefined;
+    }
+    if (!line) {
+      return;
+    }
+    const key = `${line.x}_${line.y}`;
+    const sel = this.boxContainerRef.current.querySelector(
+      `rect[data-line-key="${CSS.escape(key)}"]`,
+    );
+    if (!sel) {
+      return;
+    }
+    const color = options.color || '#ffeb3b';
+    const opacity = options.opacity ?? 0.5;
+    // Capture the current inline fill before overwriting so we can restore
+    // it on the next clear (the SVG default is black, which would flash
+    // through if we just emptied the inline style).
+    this.highlightedRectOriginalFill = sel.style.fill;
+    sel.classList.add('ocr-line-highlighted');
+    sel.style.fill = fade(color, opacity);
+    sel.style.stroke = fade(color, Math.min(1, opacity + 0.3));
+    sel.style.strokeWidth = '2';
+    this.highlightedRect = sel;
+  }
+
   /** Render the page overlay */
   render() {
     const {
@@ -116,7 +211,7 @@ class PageTextDisplay extends React.Component {
       bgColor,
       useAutoColors,
       pageColors,
-      fontFamily,
+      overlayTheme,
     } = this.props;
 
     const containerStyle = {
@@ -141,11 +236,23 @@ class PageTextDisplay extends React.Component {
       bg = pageColors.bgColor;
     }
 
-    const renderOpacity = !visible && selectable ? 0 : opacity;
-    const boxStyle = { fill: fade(bg, renderOpacity) };
+    // Background rectangles are only rendered opaque when the overlay text is
+    // visible. In all other cases (text overlay off, or selectable-text-only)
+    // they stay transparent so they don't occlude the image when the wrapper
+    // is forced visible (e.g. when a single line is highlighted from the OCR
+    // panel).
+    const renderOpacity = visible ? opacity : 0;
+    // pointerEvents: 'fill' makes a transparent rect still receive clicks,
+    // which is required because the panel-to-image highlight uses
+    // `fill: rgba(_,0)` as the default. cursor: pointer makes the
+    // affordance discoverable.
+    const boxStyle = {
+      fill: fade(bg, renderOpacity),
+      pointerEvents: 'fill',
+      cursor: 'pointer',
+    };
     const textStyle = {
       fill: fade(fg, renderOpacity),
-      fontFamily,
     };
     const renderLines = lines.filter((l) => l.width > 0 && l.height > 0);
 
@@ -159,17 +266,18 @@ class PageTextDisplay extends React.Component {
      * So we have to go against best practices and use user agent sniffing to determine dynamically
      * how to render lines and spans, sorry :-/ */
     const isGecko = runningInGecko();
+    // NOTE: Gecko really works best with a flattened bunch of text nodes. Wrapping the
+    //       lines in a <g>, e.g. breaks text selection in similar ways to the below
+    //       WebKit-specific note, for some reason ¯\_(ツ)_/¯
     // eslint-disable-next-line require-jsdoc
-    let LineWrapper = ({ children }) => <text style={textStyle}>{children}</text>;
-    // eslint-disable-next-line react/jsx-props-no-spreading, require-jsdoc
-    let SpanElem = (props) => <tspan {...props} />;
-    if (isGecko) {
-      // NOTE: Gecko really works best with a flattened bunch of text nodes. Wrapping the
-      //       lines in a <g>, e.g. breaks text selection in similar ways to the below
-      //       WebKit-specific note, for some reason ¯\_(ツ)_/¯
-      LineWrapper = React.Fragment;
-      // eslint-disable-next-line react/jsx-props-no-spreading, require-jsdoc
-      SpanElem = (props) => <text style={textStyle} {...props} />;
+    const LineWrapper = isGecko ? (
+      <></>
+    ) : (
+      ({ children }) => <text style={textStyle}>{children}</text>
+    );
+    // eslint-disable-next-line require-jsdoc
+    function SpanElem(props) {
+      return isGecko ? <text style={textStyle} {...props} /> : <tspan {...props} />;
     }
     return (
       <div ref={this.containerRef} style={containerStyle}>
@@ -191,6 +299,7 @@ class PageTextDisplay extends React.Component {
             {renderLines.map((line) => (
               <rect
                 key={`rect-${line.x}.${line.y}`}
+                data-line-key={`${line.x}_${line.y}`}
                 x={line.x}
                 y={line.y}
                 width={line.width}
@@ -200,7 +309,7 @@ class PageTextDisplay extends React.Component {
             ))}
           </g>
         </svg>
-        <svg style={{ ...svgStyle, position: 'absolute' }}>
+        <OverlaySvg overlayTheme={overlayTheme} style={{ ...svgStyle, position: 'absolute' }}>
           <g ref={this.textContainerRef}>
             {renderLines.map((line) =>
               line.spans ? (
@@ -232,21 +341,26 @@ class PageTextDisplay extends React.Component {
                 >
                   {line.text}
                 </text>
-              )
+              ),
             )}
           </g>
-        </svg>
+        </OverlaySvg>
       </div>
     );
   }
 }
 
+const PageTextDisplayWithTheme = React.forwardRef(function PageTextDisplayWithTheme(props, ref) {
+  const theme = useTheme();
+  return <PageTextDisplay {...props} ref={ref} overlayTheme={theme?.textOverlay} />;
+});
+
 PageTextDisplay.propTypes = {
+  overlayTheme: PropTypes.object,
   selectable: PropTypes.bool.isRequired,
   visible: PropTypes.bool.isRequired,
   opacity: PropTypes.number.isRequired,
   textColor: PropTypes.string.isRequired,
-  fontFamily: PropTypes.oneOfType([PropTypes.string, PropTypes.arrayOf(PropTypes.string)]),
   bgColor: PropTypes.string.isRequired,
   useAutoColors: PropTypes.bool.isRequired,
   width: PropTypes.number.isRequired,
@@ -258,10 +372,8 @@ PageTextDisplay.propTypes = {
   pageColors: PropTypes.object,
 };
 PageTextDisplay.defaultProps = {
+  overlayTheme: undefined,
   pageColors: undefined,
 };
-PageTextDisplay.defaultProps = {
-  fontFamily: undefined,
-};
 
-export default PageTextDisplay;
+export default PageTextDisplayWithTheme;

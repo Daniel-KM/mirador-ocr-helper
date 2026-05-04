@@ -37,6 +37,7 @@ function parseHocrNode(node, endOfLine = false, scaleFactor = 1) {
       x: ulx,
       y: uly,
       isExtra: false,
+      isHighlighted: false,
     },
   ];
 
@@ -132,9 +133,9 @@ export function parseHocr(hocrText, referenceSize) {
     }
   }
   return {
-    height: pageSize[3],
+    height: pageSize[3] * scaleFactor,
     lines,
-    width: pageSize[2],
+    width: pageSize[2] * scaleFactor,
   };
 }
 
@@ -207,6 +208,7 @@ export function parseAlto(altoText, imgSize) {
       spans: [],
       x: Number.parseInt(lineNode.getAttribute('HPOS'), 10) * scaleFactorX,
       y: Number.parseInt(lineNode.getAttribute('VPOS'), 10) * scaleFactorY,
+      isHighlighted: false
     };
     const textNodes = lineNode.querySelectorAll('String, SP, HYP');
     for (const [textIdx, textNode] of textNodes.entries()) {
@@ -342,9 +344,32 @@ export function parseOcr(ocrText, referenceSize) {
  * @param scaleFactor Factor to apply to coordinates to convert from canvas size to rendered size
  * @returns parsed OCR boxes
  */
-export function parseIiifAnnotations(annos, imgSize) {
-  const fragmentPat = /.+#xywh=(\d+),(\d+),(\d+),(\d+)/g;
+// Accept both the legacy `uri#xywh=...` shape (oa annotations, IIIF 2)
+// and a bare `xywh=...` value extracted from a W3C FragmentSelector.
+const XYWH_PAT = /(?:^|#)xywh=(\d+),(\d+),(\d+),(\d+)/;
 
+// Normalise an annotation target to a string that XYWH_PAT can match.
+// W3C IIIF 3 annotations expose a SpecificResource object whose
+// `selector` (singleton or array) carries the FragmentSelector; legacy
+// oa annotations expose a string.
+function targetToFragmentString(target) {
+  if (target == null) {
+    return '';
+  }
+  if (typeof target === 'string') {
+    return target;
+  }
+  const sel = target.selector;
+  if (sel) {
+    const first = Array.isArray(sel) ? sel[0] : sel;
+    if (first && typeof first.value === 'string') {
+      return first.value;
+    }
+  }
+  return target.id || target['@id'] || '';
+}
+
+export function parseIiifAnnotations(annos, imgSize) {
   // TODO: Handle word-level annotations
   // See if we can tell from the annotations themselves if it targets a line
   const lineAnnos = annos.filter(
@@ -353,24 +378,31 @@ export function parseIiifAnnotations(annos, imgSize) {
       anno.dcType === 'Line' // Europeana
   );
   const targetAnnos = lineAnnos.length > 0 ? lineAnnos : annos;
-  const boxes = targetAnnos.map((anno) => {
-    let text;
-    if (anno.resource) {
-      text = anno.resource.chars ?? anno.resource.value;
-    } else {
-      text = anno.body.value;
-    }
-    let target = anno.target || anno.on;
-    target = Array.isArray(target) ? target[0] : target;
-    const [x, y, width, height] = target.matchAll(fragmentPat).next().value.slice(1, 5);
-    return {
-      height: parseInt(height, 10),
-      text,
-      width: parseInt(width, 10),
-      x: parseInt(x, 10),
-      y: parseInt(y, 10),
-    };
-  });
+  const boxes = targetAnnos
+    .map((anno) => {
+      let text;
+      if (anno.resource) {
+        text = anno.resource.chars ?? anno.resource.value;
+      } else {
+        text = anno.body?.value;
+      }
+      let target = anno.target || anno.on;
+      target = Array.isArray(target) ? target[0] : target;
+      const fragmentStr = targetToFragmentString(target);
+      const match = fragmentStr.match(XYWH_PAT);
+      if (!match) {
+        return null;
+      }
+      const [, x, y, width, height] = match;
+      return {
+        height: parseInt(height, 10),
+        text,
+        width: parseInt(width, 10),
+        x: parseInt(x, 10),
+        y: parseInt(y, 10),
+      };
+    })
+    .filter(Boolean);
 
   return {
     ...(imgSize ?? getFallbackImageSize(boxes)),

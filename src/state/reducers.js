@@ -13,6 +13,24 @@ export const textsReducer = (state = {}, action) => {
           sourceType: action.sourceType,
         },
       };
+    case PluginActionTypes.HIGHLIGHT_LINE:
+      return {
+        ...state,
+        [action.targetId]: {
+          ...state[action.targetId],
+          text: {
+            ...state[action.targetId].text,
+            lines: [
+              ...state[action.targetId].text.lines.map((line, index) => {
+                line.isHighlighted = !line.isHighlighted && action?.line?.x === line.x && action?.line?.y === line.y;
+                line.initiator = line.isHighlighted ? action.initiator : null;
+                line.index = index
+                return line;
+              }),
+            ],
+          },
+        },
+      };
     case PluginActionTypes.REQUEST_TEXT:
       return {
         ...state,
@@ -63,8 +81,7 @@ export const textsReducer = (state = {}, action) => {
         ...state,
         [action.targetId]: {
           ...state[action.targetId],
-          bgColor: action.bgColor,
-          textColor: action.textColor,
+          color: action.color,
         },
       };
     default:

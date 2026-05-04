@@ -1,7 +1,7 @@
 import React, { Component } from 'react';
-import ReactDOM from 'react-dom';
+import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
-import PageTextDisplay from './PageTextDisplay';
+import PageTextDisplay from './PageTextDisplay.jsx';
 
 /** Overlay that renders OCR or transcription text in a SVG.
  *
@@ -16,6 +16,11 @@ class MiradorTextOverlay extends Component {
 
     this.renderRefs = [React.createRef(), React.createRef()];
     this.containerRef = React.createRef();
+    this.state = { hasHighlight: false };
+    // The Redux reducer for HIGHLIGHT_LINE mutates `line` objects in place,
+    // so prevProps shares the same line refs as props. Keep our own snapshot
+    // to detect transitions reliably.
+    this.lastHighlight = null;
   }
 
   /** Register OpenSeadragon callback on initial mount */
@@ -29,16 +34,8 @@ class MiradorTextOverlay extends Component {
 
   /** Register OpenSeadragon callback when viewport changes */
   componentDidUpdate(prevProps) {
-    const {
-      enabled,
-      viewer,
-      pageTexts,
-      textColor,
-      bgColor,
-      useAutoColors,
-      visible,
-      selectable,
-    } = this.props;
+    const { enabled, viewer, pageTexts, textColor, bgColor, useAutoColors, visible, selectable } =
+      this.props;
     let { opacity } = this.props;
 
     this.patchAnnotationOverlay();
@@ -62,6 +59,8 @@ class MiradorTextOverlay extends Component {
         .filter((ref) => ref.current)
         .forEach((ref) => ref.current.updateSelectability(selectable));
     }
+
+    this.syncHighlightedLine();
 
     // Manually update SVG colors for performance reasons
     // eslint-disable-next-line require-jsdoc
@@ -152,8 +151,54 @@ class MiradorTextOverlay extends Component {
       this.renderRefs[itemNo].current.updateTransforms(
         img.viewportToImageZoom(viewportZoom),
         vpBounds.x * canvasWorldScale - canvasWorldOffset,
-        vpBounds.y * canvasWorldScale
+        vpBounds.y * canvasWorldScale,
       );
+    }
+  }
+
+  /** Locate the currently highlighted line across all pageTexts. */
+  findHighlightedLine(pageTexts) {
+    for (let idx = 0; idx < (pageTexts || []).length; idx += 1) {
+      const line = (pageTexts[idx]?.lines || []).find((l) => l.isHighlighted);
+      if (line) {
+        return { line, idx };
+      }
+    }
+    return null;
+  }
+
+  /** Push the current highlight state to the right PageTextDisplay via ref. */
+  syncHighlightedLine() {
+    const { pageTexts, highlightColor } = this.props;
+    const curr = this.findHighlightedLine(pageTexts);
+    const prev = this.lastHighlight;
+
+    const sameLine = prev?.line === curr?.line && prev?.idx === curr?.idx;
+    if (sameLine) {
+      return;
+    }
+    this.lastHighlight = curr;
+
+    // Clear any previously-highlighted rect on every page (cheap and robust
+    // against page changes).
+    this.renderRefs.forEach((ref) => {
+      if (ref?.current?.highlightLine) {
+        ref.current.highlightLine(null);
+      }
+    });
+
+    if (curr) {
+      const ref = this.renderRefs[curr.idx];
+      if (ref?.current?.highlightLine) {
+        const color = highlightColor || pageTexts[curr.idx]?.color || '#ffeb3b';
+        // Use a fixed opacity so the rectangle stays visible even if the
+        // text overlay itself is hidden (opacity=0).
+        ref.current.highlightLine(curr.line, { color, opacity: 0.5 });
+      }
+    }
+
+    if (!!curr !== this.state.hasHighlight) {
+      this.setState({ hasHighlight: !!curr });
     }
   }
 
@@ -228,16 +273,21 @@ class MiradorTextOverlay extends Component {
       bgColor,
       useAutoColors,
       fontFamily,
+      doHighlightLine,
     } = this.props;
     if (!this.shouldRender() || !viewer || !pageTexts) {
       return null;
     }
-    return ReactDOM.createPortal(
+    return createPortal(
       <div
         ref={this.containerRef}
         style={{
           position: 'absolute',
-          display: selectable || visible ? null : 'none',
+          // Force the wrapper visible when a line is highlighted so the
+          // imperatively-styled <rect> shows up even if the user has not
+          // enabled the text overlay (typical case: only the OCR panel is
+          // open).
+          display: selectable || visible || this.state.hasHighlight ? null : 'none',
         }}
       >
         {pageTexts.map((page, idx) => {
@@ -267,12 +317,17 @@ class MiradorTextOverlay extends Component {
               fontFamily={fontFamily}
               bgColor={bgColor}
               useAutoColors={useAutoColors}
+              onLineClick={(line) => {
+                if (doHighlightLine && page.canvasId) {
+                  doHighlightLine(page.canvasId, line, 'image');
+                }
+              }}
               pageColors={pageFg ? { textColor: pageFg, bgColor: pageBg } : undefined}
             />
           );
         })}
       </div>,
-      viewer.canvas
+      viewer.canvas,
     );
   }
 }

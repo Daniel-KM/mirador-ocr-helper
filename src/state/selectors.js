@@ -1,23 +1,37 @@
 import { createSelector } from 'reselect';
 
-import { getWindowConfig, getVisibleCanvases, getTheme } from 'mirador/dist/es/src/state/selectors';
-import { miradorSlice } from 'mirador/dist/es/src/state/selectors/utils';
+import {
+  getWindowConfig,
+  getVisibleCanvases,
+  getTheme,
+} from 'mirador';
+import { miradorSlice } from 'mirador';
 
 const defaultConfig = {
   // Enable the text selection and display feature
   enabled: true,
-  // Default opacity of text overlay
-  opacity: 1.0,
-  // Make text selectable by default
-  selectable: false,
+  // Default opacity of text overlay (0 = hidden by default; the OCR helper
+  // panel can still highlight individual line rects regardless).
+  opacity: 0,
   // Overlay text overlay by default
-  visible: false,
+  visible: true,
+  // Whether the text overlay is selectable (allows the user to copy text). Off
+  // by default; toggled from the OverlaySettings bubble.
+  selectable: false,
   // Try to automatically determine the text and background color
-  useAutoColors: true,
-  // Color of rendered text, used as a fallback if auto-detection is enabled and fails
-  textColor: '#000000',
-  // Color of line background, used as a fallback if auto-detection is enabled and fails
-  bgColor: '#ffffff',
+  useAutoColors: false,
+  // Color of rendered box, used as a fallback if auto-detection is enabled and fails
+  color: '#00FF7B',
+  // Skip empty lines
+  skipEmptyLines: true,
+  // If enabled, the user can submit corrections to the text via email
+  correction: {
+    enabled: false,
+    emailRecipient: null,
+    emailUrlKeepParams: [],
+  },
+  // Render mode for text overlay options
+  optionsRenderMode: 'complex',
 };
 
 /** Selector to get text display options for a given window */
@@ -36,8 +50,12 @@ export const getTexts = (state) => miradorSlice(state).texts;
 /** Selector for text on all visible canvases */
 export const getTextsForVisibleCanvases = createSelector(
   [getVisibleCanvases, getTexts],
-  (canvases, texts) => {
-    if (!texts || !canvases) return null;
-    return canvases.map((c) => c.id).map((targetId) => texts[targetId]);
+  (canvases, allTexts) => {
+    if (!allTexts || !canvases) return [];
+    const texts = canvases.map((canvas) => allTexts[canvas.id]);
+    if (texts.every((t) => t === undefined)) {
+      return [];
+    }
+    return texts;
   }
 );

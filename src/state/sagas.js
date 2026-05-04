@@ -1,17 +1,19 @@
 /* eslint-disable no-underscore-dangle */
 import uniq from 'lodash/uniq';
+import { merge } from 'lodash';
 import { all, call, put, select, take, takeEvery, race } from 'redux-saga/effects';
 import fetch from 'isomorphic-unfetch';
 
-import ActionTypes from 'mirador/dist/es/src/state/actions/action-types';
-import { receiveAnnotation, updateConfig } from 'mirador/dist/es/src/state/actions';
 import {
+  ActionTypes,
+  MiradorCanvas,
   getCanvases,
-  getWindowConfig,
   getVisibleCanvases,
+  getWindowConfig,
+  receiveAnnotation,
   selectInfoResponse,
-} from 'mirador/dist/es/src/state/selectors';
-import MiradorCanvas from 'mirador/dist/es/src/lib/MiradorCanvas';
+  updateConfig,
+} from 'mirador';
 
 import {
   PluginActionTypes,
@@ -62,8 +64,9 @@ export async function fetchOcrMarkup(url) {
 
 /** Saga for discovering external OCR on visible canvases and requesting it if not yet loaded */
 export function* discoverExternalOcr({ visibleCanvases: visibleCanvasIds, windowId }) {
-  const { enabled, selectable, visible } = (yield select(getWindowConfig, { windowId }))
-    .textOverlay ?? { enabled: false };
+  const { enabled, visible } = (yield select(getWindowConfig, { windowId }))?.textOverlay ?? {
+    enabled: false,
+  };
   if (!enabled) {
     return;
   }
@@ -75,18 +78,17 @@ export function* discoverExternalOcr({ visibleCanvases: visibleCanvasIds, window
   // seem to do anything :-/
   for (const canvas of visibleCanvases) {
     const { width, height } = canvas.__jsonld;
-    const seeAlso = (Array.isArray(canvas.__jsonld.seeAlso)
-      ? canvas.__jsonld.seeAlso
-      : [canvas.__jsonld.seeAlso]
+    const seeAlso = (
+      Array.isArray(canvas.__jsonld.seeAlso) ? canvas.__jsonld.seeAlso : [canvas.__jsonld.seeAlso]
     ).filter((res) => isAlto(res) || isHocr(res))[0];
     if (seeAlso !== undefined) {
-      const ocrSource = seeAlso['@id'];
+      const ocrSource = seeAlso['id'] || seeAlso['@id']; // seeAlso.@id is iiifv2 and 'id' is iiifv3 (we prefer v3)
       const alreadyHasText = texts[canvas.id]?.source === ocrSource;
       if (alreadyHasText) {
         // eslint-disable-next-line no-continue
         continue;
       }
-      if (selectable || visible) {
+      if (visible) {
         yield put(requestText(canvas.id, ocrSource, { height, width }));
       } else {
         yield put(discoveredText(canvas.id, ocrSource));
@@ -105,8 +107,41 @@ export function* discoverExternalOcr({ visibleCanvases: visibleCanvasIds, window
   }
 }
 
-/** Saga for fetching OCR and parsing it */
+/** Saga for fetching OCR and parsing it.
+ *
+ * Skips the network round-trip when the same OCR resource is already available
+ * in the shared `texts` Redux slice, or already in flight. This dedupes work
+ * between sibling plugins that target the same slice (typically
+ * mirador-textoverlay alongside mirador-ocr-helper).
+ */
 export function* fetchAndProcessOcr({ targetId, textUri, canvasSize }) {
+  const existing = (yield select(getTexts))?.[targetId];
+  if (existing && existing.source === textUri) {
+    if (existing.text !== undefined) {
+      // Already fetched and parsed by a sibling: nothing to do.
+      return;
+    }
+    if (existing.isFetching) {
+      // Sibling fetch is in flight. Wait for its outcome via the next
+      // RECEIVE_TEXT / RECEIVE_TEXT_FAILURE for this target, instead of
+      // launching a second HTTP request for the same URI.
+      yield race({
+        receive: take(
+          (a) =>
+            a.type === PluginActionTypes.RECEIVE_TEXT
+            && a.targetId === targetId
+            && a.textUri === textUri
+        ),
+        failure: take(
+          (a) =>
+            a.type === PluginActionTypes.RECEIVE_TEXT_FAILURE
+            && a.targetId === targetId
+            && a.textUri === textUri
+        ),
+      });
+      return;
+    }
+  }
   try {
     const text = yield call(fetchOcrMarkup, textUri);
     const parsedText = yield call(parseOcr, text, canvasSize);
@@ -124,21 +159,58 @@ export async function fetchAnnotationResource(url) {
 
 /** Saga for fetching external annotation resources */
 export function* fetchExternalAnnotationResources({ targetId, annotationId, annotationJson }) {
-  if (!annotationJson.resources.some(hasExternalResource)) {
+  if (!annotationJson) {
     return;
   }
-  const resourceUris = uniq(
-    annotationJson.resources.map((anno) => anno.resource['@id'].split('#')[0])
-  );
+  if (annotationJson.type === 'AnnotationPage') {
+    // Assumption is, that the type is annotationpage when its iiifv3
+    return fetchExternalAnnotationResourceIIIFv3({ targetId, annotationId, annotationJson });
+  } else {
+    /// IIIFv2
+    if (!Array.isArray(annotationJson.resources)
+        || !annotationJson.resources.some(hasExternalResource)) {
+      return;
+    }
+    const resourceUris = uniq(
+      annotationJson.resources.map((anno) => anno.resource['@id'].split('#')[0])
+    );
+    const contents = yield all(resourceUris.map((uri) => call(fetchAnnotationResource, uri)));
+    const contentMap = Object.fromEntries(contents.map((c) => [c.id ?? c['@id'], c]));
+    const completedAnnos = annotationJson.resources.map((anno) => {
+      if (!hasExternalResource(anno)) {
+        return anno;
+      }
+      const match = anno.resource['@id'].match(charFragmentPattern);
+      if (!match) {
+        return { ...anno, resource: contentMap[anno.resource['@id']] ?? anno.resource };
+      }
+      const wholeResource = contentMap[match[1]];
+      const startIdx = Number.parseInt(match[2], 10);
+      const endIdx = Number.parseInt(match[3], 10);
+      const partialContent = wholeResource.value.substring(startIdx, endIdx);
+      return { ...anno, resource: { ...anno.resource, value: partialContent } };
+    });
+    yield put(
+      receiveAnnotation(targetId, annotationId, { ...annotationJson, resources: completedAnnos })
+    );
+  }
+}
+
+export function* fetchExternalAnnotationResourceIIIFv3({ targetId, annotationId, annotationJson }) {
+  if (!annotationJson || !Array.isArray(annotationJson.items)
+      || !annotationJson.items.some(hasExternalResource)) {
+    return;
+  }
+  const resourceUris = uniq(annotationJson.items.map((anno) => anno.body['id'].split('#')[0]));
   const contents = yield all(resourceUris.map((uri) => call(fetchAnnotationResource, uri)));
   const contentMap = Object.fromEntries(contents.map((c) => [c.id ?? c['@id'], c]));
-  const completedAnnos = annotationJson.resources.map((anno) => {
+  const completedAnnos = annotationJson.items.map((anno) => {
     if (!hasExternalResource(anno)) {
       return anno;
     }
-    const match = anno.resource['@id'].match(charFragmentPattern);
+    const match = anno.body['id'].match(charFragmentPattern);
     if (!match) {
-      return { ...anno, resource: contentMap[anno.resource['@id']] ?? anno.resource };
+      return { ...anno, resource: contentMap[anno.body['id']] ?? anno.resource };
     }
     const wholeResource = contentMap[match[1]];
     const startIdx = Number.parseInt(match[2], 10);
@@ -155,23 +227,57 @@ export function* fetchExternalAnnotationResources({ targetId, annotationId, anno
 export function* processTextsFromAnnotations({ targetId, annotationId, annotationJson }) {
   // Check if the annotation contains "content as text" resources that
   // we can extract text with coordinates from
-  const contentAsTextAnnos = annotationJson.resources.filter(
-    (anno) =>
-      anno.motivation === 'supplementing' || // IIIF 3.0
-      anno.resource['@type']?.toLowerCase() === 'cnt:contentastext' || // IIIF 2.0
-      ['Line', 'Word'].indexOf(anno.dcType) >= 0 // Europeana IIIF 2.0
-  );
 
-  if (contentAsTextAnnos.length > 0) {
-    const parsed = yield call(parseIiifAnnotations, contentAsTextAnnos);
-    yield put(receiveText(targetId, annotationId, 'annos', parsed));
+  if (!annotationJson) {
+    return;
+  }
+  let array = [];
+  if (annotationJson.type === 'AnnotationPage') {
+    if (!Array.isArray(annotationJson.items)) {
+      return;
+    }
+    // iiif v3 check, this is a little hacky and could be better checked by accessing the top-most @context
+    // let's assume the annotations' body's id can be de-referenced directly
+    array = annotationJson.items.filter(
+      (anno) =>
+        anno
+        && anno.motivation === 'supplementing' // must be supplementing
+        && anno.type === 'Annotation'
+        && anno.body
+        && anno.body.type === 'TextualBody' // https://www.w3.org/TR/annotation-model/#embedded-textual-body
+    );
+    // FIXME: This is untested, however based on W3/annotation model and IIIF 3.0 documentation, this should be for "inline" OCR
+    if (array.length > 0) {
+      const parsed = yield call(parseIiifAnnotations, array);
+      yield put(receiveText(targetId, annotationId, 'annos', parsed));
+    }
+    // Nothing is being parsed if there are external annotations.
+    // 28.10.2021 Loris Sauter: To me the IIIF v3 Documentation is unclear if external OCR resources MUST NOT be part of a supplementing or not.
+    // However, in order to process such external ones, there would be more filtering required
+  } else {
+    if (!Array.isArray(annotationJson.resources)) {
+      return;
+    }
+    array = annotationJson.resources;
+    const contentAsTextAnnos = array.filter(
+      (anno) =>
+        anno
+        && (anno.motivation === 'supplementing' // IIIF 3.0
+          || anno.resource?.['@type']?.toLowerCase() === 'cnt:contentastext' // IIIF 2.0
+          || ['Line', 'Word'].indexOf(anno.dcType) >= 0) // Europeana IIIF 2.0
+    );
+
+    if (contentAsTextAnnos.length > 0) {
+      const parsed = yield call(parseIiifAnnotations, contentAsTextAnnos);
+      yield put(receiveText(targetId, annotationId, 'annos', parsed));
+    }
   }
 }
 
 /** Saga for requesting texts when display or selection is newly enabled */
 export function* onConfigChange({ payload, id: windowId }) {
-  const { enabled, selectable, visible } = payload.textOverlay ?? {};
-  if (!enabled || (!selectable && !visible)) {
+  const { enabled, visible } = payload?.textOverlay ?? {};
+  if (!enabled || !visible) {
     return;
   }
   const texts = yield select(getTextsForVisibleCanvases, { windowId });
@@ -199,10 +305,12 @@ export function* onConfigChange({ payload, id: windowId }) {
 }
 
 /** Inject translation keys for this plugin into thte config */
-export function* injectTranslations() {
+export function* injectTranslations({ config }) {
+  const additionalTranslations = config?.locales || {};
+
   yield put(
     updateConfig({
-      translations,
+      translations: merge(translations, additionalTranslations),
     })
   );
 }
@@ -244,8 +352,8 @@ export function* fetchColors({ targetId, infoId }) {
     //        explicitely in the info response instead.
     const imgUrl = `${serviceId}/full/200,/0/default.jpg`;
     const imgData = yield call(loadImageData, imgUrl);
-    const { textColor, bgColor } = yield call(getPageColors, imgData);
-    yield put(receiveColors(targetId, textColor, bgColor));
+    const { color } = yield call(getPageColors, imgData);
+    yield put(receiveColors(targetId, color));
   } catch (error) {
     console.error(error);
     // NOP
