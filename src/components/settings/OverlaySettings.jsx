@@ -7,6 +7,7 @@ import SubjectIcon from '@mui/icons-material/Subject';
 import OpacityIcon from '@mui/icons-material/Opacity';
 import PaletteIcon from '@mui/icons-material/Palette';
 import TextFieldsIcon from '@mui/icons-material/TextFields';
+import ChromeReaderModeIcon from '@mui/icons-material/ChromeReaderMode';
 import TextSelectIcon from '../TextSelectIcon.jsx';
 import CircularProgress from '@mui/material/CircularProgress';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -63,6 +64,7 @@ const OverlaySettings = ({
     useAutoColors,
     optionsRenderMode,
     bubbleVisible,
+    panelVisible,
   } = windowTextOverlayOptions;
   const [open, setOpen] = useState(enabled && (visible || selectable || bubbleVisible));
   // The component stays mounted across show/hide cycles (the early null
@@ -152,7 +154,25 @@ const OverlaySettings = ({
         {isSmallDisplay && toggleButton}
         {showAllButtons && (
           <>
-            <ButtonContainer withBorder paddingPrev={isSmallDisplay ? 8 : 0} paddingNext={8}>
+            <ButtonContainer withBorder paddingPrev={isSmallDisplay ? 8 : 0} paddingNext={0}>
+              <MiradorMenuButton
+                containerId={containerId}
+                aria-label={t('panelVisible') || 'Show / hide OCR panel'}
+                onClick={() => {
+                  updateWindowTextOverlayOptions({
+                    ...windowTextOverlayOptions,
+                    panelVisible: panelVisible === false,
+                  });
+                }}
+                aria-pressed={panelVisible !== false}
+                style={{
+                  backgroundColor: panelVisible !== false ? toggledBubbleBg : 'transparent',
+                }}
+              >
+                <ChromeReaderModeIcon />
+              </MiradorMenuButton>
+            </ButtonContainer>
+            <ButtonContainer paddingNext={8}>
               <MiradorMenuButton
                 containerId={containerId}
                 aria-label={t('textVisible')}

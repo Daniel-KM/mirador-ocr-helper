@@ -16,8 +16,11 @@ const defaultConfig = {
   // Default opacity of text overlay (0 = hidden by default; the OCR helper
   // panel can still highlight individual line rects regardless).
   opacity: 0,
-  // Overlay text overlay by default
-  visible: true,
+  // Text overlay on the image is off by default: the side panel covers the
+  // OCR-reading use case without the cost of painting/laying out hundreds of
+  // <text>/<rect> nodes per page. The Tt bubble button (or raising opacity)
+  // enables it on demand.
+  visible: false,
   // Whether the text overlay is selectable (allows the user to copy text). Off
   // by default; toggled from the OverlaySettings bubble.
   selectable: false,

@@ -253,8 +253,11 @@ class MiradorTextOverlay extends Component {
 
   /** If the overlay should be rendered at all */
   shouldRender(props) {
-    const { enabled, pageTexts } = props ?? this.props;
-    return enabled && pageTexts.length > 0;
+    const { enabled, pageTexts, visible, selectable } = props ?? this.props;
+    // Tt off + text not selectable → no SVG layer at all. Saves the
+    // <rect>/<text> DOM cost on multi-page navigation; image-to-panel
+    // clicks are tied to the rect layer, so they intentionally stop.
+    return enabled && pageTexts.length > 0 && (visible || selectable);
   }
 
   /** Update container dimensions and page scale/offset every time the OSD viewport changes. */
@@ -326,7 +329,7 @@ class MiradorTextOverlay extends Component {
     // visible — that's the only place the image-to-panel highlight is
     // observable. Otherwise let OSD receive the click so its default
     // click-to-zoom behaviour kicks in.
-    const rectClickable = panelVisible !== false && visible !== false;
+    const rectClickable = panelVisible !== false;
     return createPortal(
       <div
         ref={this.containerRef}
