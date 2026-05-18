@@ -24,7 +24,11 @@ import {
   requestColors,
   receiveColors,
 } from './actions';
-import { getTexts, getTextsForVisibleCanvases } from './selectors';
+import {
+  getTexts,
+  getTextsForVisibleCanvases,
+  getWindowTextOverlayOptions,
+} from './selectors';
 import translations from '../locales';
 import { parseIiifAnnotations, parseOcr } from '../lib/ocrFormats';
 import { getPageColors } from '../lib/color';
