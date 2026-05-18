@@ -64,8 +64,14 @@ export async function fetchOcrMarkup(url) {
 
 /** Saga for discovering external OCR on visible canvases and requesting it if not yet loaded */
 export function* discoverExternalOcr({ visibleCanvases: visibleCanvasIds, windowId }) {
-  const { enabled, visible, useAutoColors } =
-    (yield select(getWindowConfig, { windowId }))?.textOverlay ?? { enabled: false };
+  // Read through getWindowTextOverlayOptions so the plugin's defaultConfig
+  // (enabled: true) applies when the user has never touched textOverlay.
+  // Reading getWindowConfig directly only sees explicit user overrides and the
+  // textOverlay key is undefined by default → the saga short-circuited and ALTO
+  // was never fetched.
+  const { enabled, visible, useAutoColors } = yield select(getWindowTextOverlayOptions, {
+    windowId,
+  });
   if (!enabled) {
     return;
   }
@@ -76,22 +82,38 @@ export function* discoverExternalOcr({ visibleCanvases: visibleCanvasIds, window
   // FIXME: This should be doable with the `all` saga combinator, but it doesn't
   // seem to do anything :-/
   for (const canvas of visibleCanvases) {
-    const { width, height } = canvas.__jsonld;
+    // Mirador 3 exposed raw IIIF data on canvas.__jsonld; Mirador 4 lifts the
+    // same fields directly onto the canvas object. Support both so seeAlso is
+    // discoverable across versions.
+    const jsonld = canvas.__jsonld ?? canvas;
+    const { width, height } = jsonld;
+    const seeAlsoRaw = jsonld.seeAlso;
     const seeAlso = (
-      Array.isArray(canvas.__jsonld.seeAlso) ? canvas.__jsonld.seeAlso : [canvas.__jsonld.seeAlso]
+      Array.isArray(seeAlsoRaw) ? seeAlsoRaw : [seeAlsoRaw]
     ).filter((res) => isAlto(res) || isHocr(res))[0];
     if (seeAlso !== undefined) {
       const ocrSource = seeAlso['id'] || seeAlso['@id']; // seeAlso.@id is iiifv2 and 'id' is iiifv3 (we prefer v3)
-      const alreadyHasText = texts[canvas.id]?.source === ocrSource;
+      // Skip when we already have a fully-fetched text for this canvas, even if
+      // it came from a different source (e.g. an AnnotationPage was already
+      // parsed via processTextsFromAnnotations and the canvas also advertises
+      // an ALTO seeAlso). Otherwise toggling visible re-launches a redundant
+      // fetch, flips isFetching to true and blanks the panel.
+      const existing = texts[canvas.id];
+      const alreadyHasText =
+        existing?.source === ocrSource ||
+        (existing && !existing.isFetching && existing.text !== undefined);
       if (alreadyHasText) {
         // eslint-disable-next-line no-continue
         continue;
       }
-      if (visible) {
-        yield put(requestText(canvas.id, ocrSource, { height, width }));
-      } else {
-        yield put(discoveredText(canvas.id, ocrSource));
-      }
+      // Always fetch the OCR markup preemptively when ALTO/hOCR is advertised
+      // via seeAlso, even when the text overlay itself is not visible yet.
+      // Otherwise IIIF AnnotationPage texts (sourceType='annos', delivered via
+      // canvas.annotations and processed by processTextsFromAnnotations) win
+      // the race and the user never sees the richer ALTO data unless they
+      // explicitly toggle the Tt button. The RECEIVE_TEXT reducer already gives
+      // precedence to sourceType='ocr' over 'annos'.
+      yield put(requestText(canvas.id, ocrSource, { height, width }));
       // Auto-detected page colors require fetching a downsized JPEG and running
       // a pixel histogram on the main thread. Skip the whole round-trip when
       // the user has not opted in (useAutoColors=false is the default),
@@ -120,8 +142,16 @@ export function* discoverExternalOcr({ visibleCanvases: visibleCanvasIds, window
  */
 export function* fetchAndProcessOcr({ targetId, textUri, canvasSize }) {
   const existing = (yield select(getTexts))?.[targetId];
-  if (existing && existing.source === textUri) {
-    if (existing.text !== undefined) {
+  // Beware: the REQUEST_TEXT reducer has already mutated `source` to textUri
+  // and `isFetching` to true before this saga runs. So `existing.source ===
+  // textUri` is tautological and an existing `text` may be a leftover from a
+  // previous, unrelated source (e.g. an AnnotationPage text when the current
+  // request targets ALTO). Only treat the slot as "already fetched" when the
+  // existing text came from a real OCR markup fetch (sourceType === 'ocr') and
+  // the sibling fetch was successful — otherwise we must actually run the
+  // request, otherwise isFetching stays true forever.
+  if (existing && existing.source === textUri && existing.sourceType === 'ocr') {
+    if (existing.text !== undefined && !existing.error) {
       // Already fetched and parsed by a sibling: nothing to do.
       return;
     }
