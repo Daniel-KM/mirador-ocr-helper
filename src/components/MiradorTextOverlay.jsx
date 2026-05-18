@@ -253,11 +253,13 @@ class MiradorTextOverlay extends Component {
 
   /** If the overlay should be rendered at all */
   shouldRender(props) {
-    const { enabled, pageTexts, visible, selectable } = props ?? this.props;
-    // Tt off + text not selectable → no SVG layer at all. Saves the
-    // <rect>/<text> DOM cost on multi-page navigation; image-to-panel
-    // clicks are tied to the rect layer, so they intentionally stop.
-    return enabled && pageTexts.length > 0 && (visible || selectable);
+    const { enabled, pageTexts, visible, selectable, panelVisible } = props ?? this.props;
+    // Tt off + text not selectable + panel closed → no SVG layer at all.
+    // Saves the <rect>/<text> DOM cost on multi-page navigation. The OCR
+    // panel needs the rect layer to mirror its highlight on the image, so
+    // keep rendering as long as the panel is open even when the text is
+    // invisible/non-selectable.
+    return enabled && pageTexts.length > 0 && (visible || selectable || panelVisible);
   }
 
   /** Update container dimensions and page scale/offset every time the OSD viewport changes. */
