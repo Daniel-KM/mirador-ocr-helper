@@ -45,7 +45,6 @@ const BubbleContainer = styled('div', {
 
 /** Control text overlay settings  */
 const OverlaySettings = ({
-  containerId,
   imageToolsEnabled,
   windowTextOverlayOptions,
   textsAvailable,
@@ -108,7 +107,6 @@ const OverlaySettings = ({
       >
         <ButtonContainer withBorder={!textsFetching && open && isSmallDisplay}>
           <MiradorMenuButton
-            containerId={containerId}
             aria-label={t('textVisible')}
             onClick={() => {
               updateWindowTextOverlayOptions({
@@ -132,7 +130,6 @@ const OverlaySettings = ({
     const toggleButton = (
       <ButtonContainer withBorder={!textsFetching && open && isSmallDisplay}>
         <MiradorMenuButton
-          containerId={containerId}
           aria-expanded={showAllButtons}
           aria-haspopup
           aria-label={open ? t('collapseTextOverlayOptions') : t('expandTextOverlayOptions')}
@@ -156,7 +153,6 @@ const OverlaySettings = ({
           <>
             <ButtonContainer withBorder paddingPrev={isSmallDisplay ? 8 : 0} paddingNext={0}>
               <MiradorMenuButton
-                containerId={containerId}
                 aria-label={t('panelVisible') || 'Show / hide OCR panel'}
                 onClick={() => {
                   updateWindowTextOverlayOptions({
@@ -174,7 +170,6 @@ const OverlaySettings = ({
             </ButtonContainer>
             <ButtonContainer paddingNext={8}>
               <MiradorMenuButton
-                containerId={containerId}
                 aria-label={t('textVisible')}
                 onClick={() => {
                   updateWindowTextOverlayOptions({
@@ -196,7 +191,6 @@ const OverlaySettings = ({
             </ButtonContainer>
             <ButtonContainer>
               <MiradorMenuButton
-                containerId={containerId}
                 aria-label={t('overlayTextSelectable') || 'Allow text selection'}
                 onClick={() => {
                   updateWindowTextOverlayOptions({
@@ -213,7 +207,6 @@ const OverlaySettings = ({
             <ButtonContainer>
               <MiradorMenuButton
                 id="text-opacity-slider-label"
-                containerId={containerId}
                 disabled={!visible}
                 aria-label={t('overlayOpacity')}
                 aria-controls="text-opacity-slider"
@@ -241,7 +234,6 @@ const OverlaySettings = ({
             <ButtonContainer withBorder={!isSmallDisplay} paddingNext={isSmallDisplay ? 0 : 8}>
               <MiradorMenuButton
                 id="color-picker-label"
-                containerId={containerId}
                 disabled={!visible}
                 aria-label={t('colorPicker')}
                 aria-controls="color-picker"
@@ -256,7 +248,6 @@ const OverlaySettings = ({
               {visible && showColorPicker && (
                 <ColorWidget
                   t={t}
-                  containerId={containerId}
                   textColor={textColor}
                   bgColor={bgColor}
                   defaultTextColor={DEFAULT_TEXT_COLOR}
@@ -286,7 +277,6 @@ const OverlaySettings = ({
 };
 
 OverlaySettings.propTypes = {
-  containerId: PropTypes.string.isRequired,
   imageToolsEnabled: PropTypes.bool.isRequired,
   textsAvailable: PropTypes.bool.isRequired,
   textsFetching: PropTypes.bool.isRequired,

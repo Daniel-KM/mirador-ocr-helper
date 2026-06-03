@@ -59,7 +59,6 @@ const ColorWidget = ({
   t,
   pageColors,
   useAutoColors,
-  containerId,
 }) => {
   const showResetButton =
     textColor.toLowerCase() !== defaultTextColor.toLowerCase()
@@ -91,7 +90,6 @@ const ColorWidget = ({
       />
       {showResetButton && (
         <MiradorMenuButton
-          containerId={containerId}
           aria-label={t('resetTextColors')}
           onClick={() =>
             onChange({
@@ -109,7 +107,6 @@ const ColorWidget = ({
 };
 
 ColorWidget.propTypes = {
-  containerId: PropTypes.string.isRequired,
   textColor: PropTypes.string.isRequired,
   bgColor: PropTypes.string.isRequired,
   defaultTextColor: PropTypes.string.isRequired,

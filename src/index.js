@@ -97,7 +97,6 @@ export default [
       const win = state.windows && state.windows[windowId];
       const texts = getTextsForVisibleCanvases(state, { windowId });
       return {
-        containerId: windowId,
         imageToolsEnabled: !!(win && win.imageToolsEnabled),
         windowTextOverlayOptions: getWindowTextOverlayOptions(state, { windowId }),
         textsAvailable: texts.length > 0,
