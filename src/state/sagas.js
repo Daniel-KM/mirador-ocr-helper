@@ -15,6 +15,18 @@ import {
   updateConfig,
 } from 'mirador';
 
+import { getPageColors } from '../lib/color';
+import {
+  asArray,
+  flattenBodies,
+  getAnnotationModel,
+  getBodyId,
+  getBodyValue,
+  hasMotivation,
+  mapBodies,
+} from '../lib/iiifAnnotations';
+import { parseIiifAnnotations, parseOcr } from '../lib/ocrFormats';
+import translations from '../locales';
 import {
   PluginActionTypes,
   requestText,
@@ -29,20 +41,29 @@ import {
   getTextsForVisibleCanvases,
   getWindowTextOverlayOptions,
 } from './selectors';
-import translations from '../locales';
-import { parseIiifAnnotations, parseOcr } from '../lib/ocrFormats';
-import { getPageColors } from '../lib/color';
-
 const charFragmentPattern = /^(.+)#char=(\d+),(\d+)$/;
 
-/** Check if an annotation has external resources that need to be loaded */
-function hasExternalResource(anno) {
-  return (
-    anno.resource?.chars === undefined &&
-    anno.body?.value === undefined &&
-    Object.keys(anno.resource).length === 1 &&
-    anno.resource['@id'] !== undefined
-  );
+/** External text bodies which this plugin can dereference. */
+function externalBodies(annotation, { bodyKey, isV3 }) {
+  if (isV3 && !hasMotivation(annotation, 'supplementing')) {
+    return [];
+  }
+  return flattenBodies(annotation[bodyKey]).filter((body) => {
+    const type =
+      typeof body === 'object' && body !== null ? (body.type ?? body['@type']) : undefined;
+    const types = asArray(type)
+      .filter((value) => typeof value === 'string')
+      .map((value) => value.toLowerCase());
+    const textTypes = isV3
+      ? ['text', 'textualbody']
+      : ['text', 'textualbody', 'cnt:contentastext', 'dctypes:text'];
+    const format = typeof body === 'object' && body !== null ? body.format : undefined;
+    const hasTextFormat = typeof format === 'string' && format.toLowerCase().startsWith('text/');
+    const isText =
+      types.some((value) => textTypes.includes(value)) ||
+      (types.length === 0 && (format === undefined || hasTextFormat));
+    return isText && getBodyId(body) !== undefined && getBodyValue(body) === undefined;
+  });
 }
 
 /** Checks if a given resource points to an ALTO OCR document */
@@ -91,12 +112,11 @@ export function* discoverExternalOcr({ visibleCanvases: visibleCanvasIds, window
     // discoverable across versions.
     const jsonld = canvas.__jsonld ?? canvas;
     const { width, height } = jsonld;
-    const seeAlsoRaw = jsonld.seeAlso;
-    const seeAlso = (
-      Array.isArray(seeAlsoRaw) ? seeAlsoRaw : [seeAlsoRaw]
-    ).filter((res) => isAlto(res) || isHocr(res))[0];
-    if (seeAlso !== undefined) {
-      const ocrSource = seeAlso['id'] || seeAlso['@id']; // seeAlso.@id is iiifv2 and 'id' is iiifv3 (we prefer v3)
+    const ocrResource = [jsonld.seeAlso, jsonld.rendering]
+      .flatMap(asArray)
+      .find((resource) => isAlto(resource) || isHocr(resource));
+    if (ocrResource !== undefined) {
+      const ocrSource = ocrResource.id ?? ocrResource['@id'];
       // Skip when we already have a fully-fetched text for this canvas, even if
       // it came from a different source (e.g. an AnnotationPage was already
       // parsed via processTextsFromAnnotations and the canvas also advertises
@@ -189,126 +209,92 @@ export function* fetchAndProcessOcr({ targetId, textUri, canvasSize }) {
   }
 }
 
-/** Fetch external annotation resource JSON */
-export async function fetchAnnotationResource(url) {
+/** Fetch an external annotation body, preserving plain text as a body object. */
+export async function fetchAnnotationResource(url, declaredFormat) {
   const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(`Unable to fetch annotation body ${url}: ${resp.status} ${resp.statusText}`);
+  }
+  const responseFormat = resp.headers?.get('content-type')?.split(';')[0];
+  const format = declaredFormat ?? responseFormat;
+  if (format?.startsWith('text/')) {
+    return { format, id: url, type: 'Text', value: await resp.text() };
+  }
   return resp.json();
 }
 
 /** Saga for fetching external annotation resources */
 export function* fetchExternalAnnotationResources({ targetId, annotationId, annotationJson }) {
-  if (!annotationJson) {
+  const model = getAnnotationModel(annotationJson);
+  const external = model.annotations.flatMap((annotation) => externalBodies(annotation, model));
+  if (external.length === 0) {
     return;
   }
-  if (annotationJson.type === 'AnnotationPage') {
-    // Assumption is, that the type is annotationpage when its iiifv3
-    return fetchExternalAnnotationResourceIIIFv3({ targetId, annotationId, annotationJson });
-  } else {
-    /// IIIFv2
-    if (!Array.isArray(annotationJson.resources)
-        || !annotationJson.resources.some(hasExternalResource)) {
-      return;
+
+  const resourceUris = uniq(external.map((body) => getBodyId(body).split('#')[0]));
+  const contents = yield all(
+    resourceUris.map((uri) => {
+      const body = external.find((candidate) => getBodyId(candidate).split('#')[0] === uri);
+      return body?.format
+        ? call(fetchAnnotationResource, uri, body.format)
+        : call(fetchAnnotationResource, uri);
+    }),
+  );
+  const contentMap = Object.fromEntries(contents.map((c) => [c.id ?? c['@id'], c]));
+  const completedAnnos = model.annotations.map((annotation) => {
+    const externalForAnnotation = externalBodies(annotation, model);
+    if (externalForAnnotation.length === 0) {
+      return annotation;
     }
-    const resourceUris = uniq(
-      annotationJson.resources.map((anno) => anno.resource['@id'].split('#')[0])
-    );
-    const contents = yield all(resourceUris.map((uri) => call(fetchAnnotationResource, uri)));
-    const contentMap = Object.fromEntries(contents.map((c) => [c.id ?? c['@id'], c]));
-    const completedAnnos = annotationJson.resources.map((anno) => {
-      if (!hasExternalResource(anno)) {
-        return anno;
+    const completedBody = mapBodies(annotation[model.bodyKey], (body) => {
+      if (!externalForAnnotation.includes(body)) {
+        return body;
       }
-      const match = anno.resource['@id'].match(charFragmentPattern);
+      const id = getBodyId(body);
+      const match = id.match(charFragmentPattern);
       if (!match) {
-        return { ...anno, resource: contentMap[anno.resource['@id']] ?? anno.resource };
+        return contentMap[id] ?? body;
       }
       const wholeResource = contentMap[match[1]];
       const startIdx = Number.parseInt(match[2], 10);
       const endIdx = Number.parseInt(match[3], 10);
-      const partialContent = wholeResource.value.substring(startIdx, endIdx);
-      return { ...anno, resource: { ...anno.resource, value: partialContent } };
+      const value = getBodyValue(wholeResource)?.substring(startIdx, endIdx);
+      if (value === undefined) {
+        return body;
+      }
+      return typeof body === 'object' ? { ...body, value } : { ...wholeResource, id, value };
     });
-    yield put(
-      receiveAnnotation(targetId, annotationId, { ...annotationJson, resources: completedAnnos })
-    );
-  }
-}
-
-export function* fetchExternalAnnotationResourceIIIFv3({ targetId, annotationId, annotationJson }) {
-  if (!annotationJson || !Array.isArray(annotationJson.items)
-      || !annotationJson.items.some(hasExternalResource)) {
-    return;
-  }
-  const resourceUris = uniq(annotationJson.items.map((anno) => anno.body['id'].split('#')[0]));
-  const contents = yield all(resourceUris.map((uri) => call(fetchAnnotationResource, uri)));
-  const contentMap = Object.fromEntries(contents.map((c) => [c.id ?? c['@id'], c]));
-  const completedAnnos = annotationJson.items.map((anno) => {
-    if (!hasExternalResource(anno)) {
-      return anno;
-    }
-    const match = anno.body['id'].match(charFragmentPattern);
-    if (!match) {
-      return { ...anno, resource: contentMap[anno.body['id']] ?? anno.resource };
-    }
-    const wholeResource = contentMap[match[1]];
-    const startIdx = Number.parseInt(match[2], 10);
-    const endIdx = Number.parseInt(match[3], 10);
-    const partialContent = wholeResource.value.substring(startIdx, endIdx);
-    return { ...anno, resource: { ...anno.resource, value: partialContent } };
+    return { ...annotation, [model.bodyKey]: completedBody };
   });
+  const annotationsKey = model.isV3 ? 'items' : 'resources';
   yield put(
-    receiveAnnotation(targetId, annotationId, { ...annotationJson, resources: completedAnnos })
+    receiveAnnotation(targetId, annotationId, {
+      ...annotationJson,
+      [annotationsKey]: completedAnnos,
+    }),
   );
 }
 
 /** Saga for processing texts from IIIF annotations */
 export function* processTextsFromAnnotations({ targetId, annotationId, annotationJson }) {
-  // Check if the annotation contains "content as text" resources that
-  // we can extract text with coordinates from
-
-  if (!annotationJson) {
-    return;
-  }
-  let array = [];
-  if (annotationJson.type === 'AnnotationPage') {
-    if (!Array.isArray(annotationJson.items)) {
-      return;
+  const model = getAnnotationModel(annotationJson);
+  const contentAsTextAnnos = model.annotations.filter((annotation) => {
+    const bodies = flattenBodies(annotation[model.bodyKey]);
+    const hasText = bodies.some((body) => getBodyValue(body) !== undefined);
+    if (model.isV3) {
+      return hasMotivation(annotation, 'supplementing') && hasText;
     }
-    // iiif v3 check, this is a little hacky and could be better checked by accessing the top-most @context
-    // let's assume the annotations' body's id can be de-referenced directly
-    array = annotationJson.items.filter(
-      (anno) =>
-        anno
-        && anno.motivation === 'supplementing' // must be supplementing
-        && anno.type === 'Annotation'
-        && anno.body
-        && anno.body.type === 'TextualBody' // https://www.w3.org/TR/annotation-model/#embedded-textual-body
+    return (
+      hasMotivation(annotation, 'supplementing') ||
+      bodies.some((body) => body?.['@type']?.toLowerCase() === 'cnt:contentastext') ||
+      ['Line', 'Word'].includes(annotation.dcType) ||
+      ['line', 'word'].includes(annotation.textGranularity)
     );
-    // FIXME: This is untested, however based on W3/annotation model and IIIF 3.0 documentation, this should be for "inline" OCR
-    if (array.length > 0) {
-      const parsed = yield call(parseIiifAnnotations, array);
-      yield put(receiveText(targetId, annotationId, 'annos', parsed));
-    }
-    // Nothing is being parsed if there are external annotations.
-    // 28.10.2021 Loris Sauter: To me the IIIF v3 Documentation is unclear if external OCR resources MUST NOT be part of a supplementing or not.
-    // However, in order to process such external ones, there would be more filtering required
-  } else {
-    if (!Array.isArray(annotationJson.resources)) {
-      return;
-    }
-    array = annotationJson.resources;
-    const contentAsTextAnnos = array.filter(
-      (anno) =>
-        anno
-        && (anno.motivation === 'supplementing' // IIIF 3.0
-          || anno.resource?.['@type']?.toLowerCase() === 'cnt:contentastext' // IIIF 2.0
-          || ['Line', 'Word'].indexOf(anno.dcType) >= 0) // Europeana IIIF 2.0
-    );
+  });
 
-    if (contentAsTextAnnos.length > 0) {
-      const parsed = yield call(parseIiifAnnotations, contentAsTextAnnos);
-      yield put(receiveText(targetId, annotationId, 'annos', parsed));
-    }
+  if (contentAsTextAnnos.length > 0) {
+    const parsed = yield call(parseIiifAnnotations, contentAsTextAnnos);
+    yield put(receiveText(targetId, annotationId, 'annos', parsed));
   }
 }
 

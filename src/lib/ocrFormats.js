@@ -1,5 +1,6 @@
 /** Functions to parse OCR boxes from various formats and render them as SVG. */
 import max from 'lodash/max';
+import { asArray, flattenBodies, getBodyValue } from './iiifAnnotations';
 
 const parser = new DOMParser();
 
@@ -344,68 +345,74 @@ export function parseOcr(ocrText, referenceSize) {
  * @param scaleFactor Factor to apply to coordinates to convert from canvas size to rendered size
  * @returns parsed OCR boxes
  */
-// Accept both the legacy `uri#xywh=...` shape (oa annotations, IIIF 2)
-// and a bare `xywh=...` value extracted from a W3C FragmentSelector.
-const XYWH_PAT = /(?:^|#)xywh=(\d+),(\d+),(\d+),(\d+)/;
 
-// Normalise an annotation target to a string that XYWH_PAT can match.
-// W3C IIIF 3 annotations expose a SpecificResource object whose
-// `selector` (singleton or array) carries the FragmentSelector; legacy
-// oa annotations expose a string.
-function targetToFragmentString(target) {
-  if (target == null) {
-    return '';
-  }
-  if (typeof target === 'string') {
-    return target;
-  }
-  const sel = target.selector;
-  if (sel) {
-    const first = Array.isArray(sel) ? sel[0] : sel;
-    if (first && typeof first.value === 'string') {
-      return first.value;
-    }
-  }
-  return target.id || target['@id'] || '';
-}
-
+/** Parse OCR data from IIIF annotations.
+ *
+ * Annotations should be pre-filtered so that they all refer to a single canvas/page.
+ * Annotations should only contain a single text granularity, that is either line or word.
+ *
+ * @param annos IIIF annotations with a plaintext body and line or word granularity
+ * @param renderedWidth Reference width of the rendered target image
+ * @param renderedHeight Reference height of the rendered target image
+ * @param scaleFactor Factor to apply to coordinates to convert from canvas size to rendered size
+ * @returns parsed OCR boxes
+ */
 export function parseIiifAnnotations(annos, imgSize) {
+  const fragmentPat = /(?:^|[#&])xywh=(?:pixel:)?([\d.]+),([\d.]+),([\d.]+),([\d.]+)/;
+
+  const textFor = (anno) => {
+    const candidates = flattenBodies(anno.body ?? anno.resource).filter(
+      (body) => getBodyValue(body) !== undefined,
+    );
+    const preferred = candidates.find((body) => {
+      return asArray(body.purpose).includes('supplementing');
+    });
+    return getBodyValue(preferred ?? candidates[0]);
+  };
+
+  const regionFor = (target) => {
+    if (Array.isArray(target)) {
+      return target.map(regionFor).find(Boolean);
+    }
+    if (typeof target === 'string') {
+      return target.match(fragmentPat)?.slice(1, 5).map(Number);
+    }
+    if (!target) {
+      return undefined;
+    }
+
+    const directRegion = regionFor(target.id ?? target['@id']);
+    if (directRegion) {
+      return directRegion;
+    }
+    const selectors = Array.isArray(target.selector) ? target.selector : [target.selector];
+    const fragmentSelector = selectors.find(
+      (selector) =>
+        selector?.type === 'FragmentSelector' || selector?.['@type'] === 'oa:FragmentSelector',
+    );
+    return regionFor(fragmentSelector?.value);
+  };
+
   // TODO: Handle word-level annotations
   // See if we can tell from the annotations themselves if it targets a line
   const lineAnnos = annos.filter(
     (anno) =>
       anno.textGranularity === 'line' || // IIIF Text Granularity
-      anno.dcType === 'Line' // Europeana
+      anno.dcType === 'Line', // Europeana
   );
   const targetAnnos = lineAnnos.length > 0 ? lineAnnos : annos;
-  const boxes = targetAnnos
-    .map((anno) => {
-      let text;
-      if (anno.resource) {
-        text = anno.resource.chars ?? anno.resource.value;
-      } else {
-        text = anno.body?.value;
-      }
-      let target = anno.target || anno.on;
-      target = Array.isArray(target) ? target[0] : target;
-      const fragmentStr = targetToFragmentString(target);
-      const match = fragmentStr.match(XYWH_PAT);
-      if (!match) {
-        return null;
-      }
-      const [, x, y, width, height] = match;
-      return {
-        height: parseInt(height, 10),
-        text,
-        width: parseInt(width, 10),
-        x: parseInt(x, 10),
-        y: parseInt(y, 10),
-      };
-    })
-    .filter(Boolean);
+  const boxes = targetAnnos.flatMap((anno) => {
+    const region = regionFor(anno.target ?? anno.on);
+    const text = textFor(anno);
+    if (!region || text === undefined) {
+      return [];
+    }
+    const [x, y, width, height] = region;
+    return [{ height, text, width, x, y }];
+  });
 
   return {
-    ...(imgSize ?? getFallbackImageSize(boxes)),
+    ...(imgSize ?? (boxes.length > 0 ? getFallbackImageSize(boxes) : { height: 0, width: 0 })),
     lines: boxes,
   };
 }
