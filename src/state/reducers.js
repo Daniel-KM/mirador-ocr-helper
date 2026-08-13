@@ -76,6 +76,15 @@ export const textsReducer = (state = {}, action) => {
           sourceType: action.sourceType,
         },
       };
+    case PluginActionTypes.REQUEST_COLORS:
+      return {
+        ...state,
+        [action.targetId]: {
+          ...state[action.targetId],
+          infoId: action.infoId,
+          isFetchingColors: true,
+        },
+      };
     case PluginActionTypes.RECEIVE_COLORS:
       return {
         ...state,
@@ -83,6 +92,15 @@ export const textsReducer = (state = {}, action) => {
           ...state[action.targetId],
           textColor: action.textColor,
           bgColor: action.bgColor,
+          isFetchingColors: false,
+        },
+      };
+    case PluginActionTypes.RECEIVE_COLORS_FAILURE:
+      return {
+        ...state,
+        [action.targetId]: {
+          ...state[action.targetId],
+          isFetchingColors: false,
         },
       };
     default:

@@ -6,6 +6,7 @@ export const PluginActionTypes = {
   HIGHLIGHT_LINE: 'mirador-textoverlay/HIGHLIGHT_LINE',
   REQUEST_COLORS: 'mirador-textoverlay/REQUEST_COLORS',
   RECEIVE_COLORS: 'mirador-textoverlay/RECEIVE_COLORS',
+  RECEIVE_COLORS_FAILURE: 'mirador-textoverlay/RECEIVE_COLORS_FAILURE',
 };
 
 /**
@@ -116,5 +117,18 @@ export function receiveColors(targetId, textColor, bgColor) {
     textColor,
     bgColor,
     type: PluginActionTypes.RECEIVE_COLORS,
+  };
+}
+
+/**
+ * receiveColorsFailure - action creator
+ * @param {string} targetId
+ * @param {Error} error
+ */
+export function receiveColorsFailure(targetId, error) {
+  return {
+    targetId,
+    error,
+    type: PluginActionTypes.RECEIVE_COLORS_FAILURE,
   };
 }

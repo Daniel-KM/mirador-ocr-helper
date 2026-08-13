@@ -35,6 +35,7 @@ import {
   discoveredText,
   requestColors,
   receiveColors,
+  receiveColorsFailure,
 } from './actions';
 import {
   getTexts,
@@ -346,9 +347,16 @@ export async function loadImageData(imgUrl) {
     img.crossOrigin = 'Anonymous';
     img.onload = () => {
       const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
       const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
       ctx.drawImage(img, 0, 0);
-      resolve(ctx.getImageData(0, 0, img.width, img.height).data);
+      resolve({
+        data: ctx.getImageData(0, 0, img.width, img.height).data,
+        height: img.height,
+        width: img.width,
+      });
     };
     img.onerror = reject;
     img.src = imgUrl;
@@ -367,20 +375,46 @@ export function* fetchColors({ targetId, infoId }) {
       ),
     });
     if (infoFailure) {
+      yield put(receiveColorsFailure(targetId, infoFailure.error));
       return;
     }
-    serviceId = infoSuccess.infoJson?.['@id'];
+    serviceId = infoSuccess.infoJson?.id ?? infoSuccess.infoJson?.['@id'];
   }
+
+  // The text lines restrict the sampling to the text area of the page.
+  const texts = yield select(getTexts);
+  const currentText = texts?.[targetId];
+  let pageText = currentText?.sourceType === 'ocr' ? currentText.text : undefined;
+  if (!pageText) {
+    const { success: textSuccess, failure: textFailure } = yield race({
+      success: take(
+        (action) =>
+          action.type === PluginActionTypes.RECEIVE_TEXT &&
+          action.targetId === targetId &&
+          action.sourceType === 'ocr',
+      ),
+      failure: take(
+        (action) =>
+          action.type === PluginActionTypes.RECEIVE_TEXT_FAILURE && action.targetId === targetId,
+      ),
+    });
+    if (textFailure) {
+      yield put(receiveColorsFailure(targetId, textFailure.error));
+      return;
+    }
+    pageText = textSuccess.parsedText;
+  }
+
   try {
     // FIXME: This assumes a Level 2 endpoint, we should probably use one of the sizes listed
     //        explicitely in the info response instead.
     const imgUrl = `${serviceId}/full/200,/0/default.jpg`;
-    const imgData = yield call(loadImageData, imgUrl);
-    const { textColor, bgColor } = yield call(getPageColors, imgData);
+    const image = yield call(loadImageData, imgUrl);
+    const { textColor, bgColor } = yield call(getPageColors, image, pageText);
     yield put(receiveColors(targetId, textColor, bgColor));
   } catch (error) {
     console.error(error);
-    // NOP
+    yield put(receiveColorsFailure(targetId, error));
   }
 }
 
