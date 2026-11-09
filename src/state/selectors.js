@@ -1,6 +1,7 @@
 import { createSelector } from 'reselect';
 
 import {
+  getCanvases,
   getWindowConfig,
   getVisibleCanvases,
   getTheme,
@@ -69,6 +70,27 @@ export const getWindowTextOverlayOptions = createSelector(
 
 /** Selector to get all loaded texts */
 export const getTexts = (state) => miradorSlice(state).texts;
+
+const hasLines = (text) => !!(text && !text.error && text.text?.lines?.length > 0);
+
+/**
+ * Check if the visible canvases have a text to display in the panel.
+ *
+ * A failed or empty text, for example a declared OCR file that does not exist,
+ * does not display the panel. While a text is loading, the panel is kept only
+ * when another canvas of the window has a text, so it does not flicker when
+ * the pages are turned.
+ */
+export const getTextsAvailable = createSelector(
+  [getCanvases, getVisibleCanvases, getTexts],
+  (canvases, visibleCanvases, allTexts) => {
+    if (!allTexts || !visibleCanvases) return false;
+    const visibleTexts = visibleCanvases.map((canvas) => allTexts[canvas.id]);
+    if (visibleTexts.some(hasLines)) return true;
+    return visibleTexts.some((text) => text?.isFetching)
+      && (canvases || []).some((canvas) => hasLines(allTexts[canvas.id]));
+  }
+);
 
 /** Selector for text on all visible canvases */
 export const getTextsForVisibleCanvases = createSelector(

@@ -9,7 +9,7 @@ import {
 import { textsReducer } from './state/reducers';
 import { highlightLine } from './state/actions';
 import textSaga from './state/sagas';
-import { getTextsForVisibleCanvases, getWindowTextOverlayOptions } from './state/selectors';
+import { getTextsAvailable, getTextsForVisibleCanvases, getWindowTextOverlayOptions } from './state/selectors';
 import MiradorTextOverlay from './components/MiradorTextOverlay.jsx';
 import MiradorOcrWindowViewer from './components/MiradorOcrWindowViewer.jsx';
 import OcrHelperMenuItem from './components/OcrHelperMenuItem.jsx';
@@ -48,7 +48,7 @@ export default [
         ?.map((page) => page?.text?.lines?.filter((line) => line?.isHighlighted))
         .flat(99)
         .shift(),
-      textsAvailable: getTextsForVisibleCanvases(state, { windowId }).length > 0,
+      textsAvailable: getTextsAvailable(state, { windowId }),
       textsFetching: getTextsForVisibleCanvases(state, { windowId }).some((t) => t?.isFetching),
       canvasId: (getCurrentCanvas(state, { windowId }) || {}).id,
       canvasIndex: getCanvasIndex(state, { windowId }),
@@ -99,7 +99,7 @@ export default [
       return {
         imageToolsEnabled: !!(win && win.imageToolsEnabled),
         windowTextOverlayOptions: getWindowTextOverlayOptions(state, { windowId }),
-        textsAvailable: texts.length > 0,
+        textsAvailable: getTextsAvailable(state, { windowId }),
         textsFetching: texts.some((t) => t?.isFetching),
         pageColors: texts.map((t) => ({
           textColor: t?.textColor,
@@ -118,10 +118,9 @@ export default [
     mode: 'add',
     mapStateToProps: (state, { windowId }) => {
       const opts = getWindowTextOverlayOptions(state, { windowId });
-      const texts = getTextsForVisibleCanvases(state, { windowId });
       return {
         bubbleVisible: !!opts.bubbleVisible,
-        textsAvailable: texts.length > 0,
+        textsAvailable: getTextsAvailable(state, { windowId }),
         windowTextOverlayOptions: opts,
       };
     },
