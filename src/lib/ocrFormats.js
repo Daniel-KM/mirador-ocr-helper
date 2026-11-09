@@ -185,7 +185,15 @@ export function parseAlto(altoText, imgSize) {
   let scaleFactorX = 1.0;
   let scaleFactorY = 1.0;
 
-  if (measurementUnit !== 'pixel') {
+  // Scale the coordinates when they are not in pixels or when the alto was
+  // made from an image with another size than the canvas (a derivative).
+  if (
+    imgSize?.width
+    && imgSize?.height
+    && pageWidth
+    && pageHeight
+    && (measurementUnit !== 'pixel' || pageWidth !== imgSize.width || pageHeight !== imgSize.height)
+  ) {
     scaleFactorX = imgSize.width / pageWidth;
     scaleFactorY = imgSize.height / pageHeight;
     pageWidth *= scaleFactorX;
