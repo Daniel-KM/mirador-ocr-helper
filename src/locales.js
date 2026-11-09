@@ -170,4 +170,48 @@ Line:
 
 `,
   },
+  // TODO br: traduire via DeepL — valeurs actuellement en anglais.
+  br: {
+    collapseTextOverlayOptions: 'Collapse OCR options',
+    disableTextOverlay: 'Disable OCR',
+    enableTextOverlay: 'Enable OCR',
+    expandTextOverlayOptions: 'Expand OCR options',
+    overlayOpacity: 'Opacity',
+    overlayVisible: 'Show/Hide OCR',
+    overlayTextSelectable: 'Allow text selection',
+    textSelect: 'Text selection',
+    textVisible: 'Text visible',
+    panelVisible: 'Show/hide OCR panel',
+    textOpacity: 'Text opacity',
+    opacityCurrentValue: 'Current text opacity: {{value}} percent',
+    colorPicker: 'Color picker',
+    textColor: 'Text color',
+    backgroundColor: 'Background color',
+    resetTextColors: 'Reset text colors',
+    ocrHelperShowOverlay: 'Show text tools',
+    ocrHelperHideOverlay: 'Hide text tools',
+    ocrCorrectionTooltip: 'Report error',
+    ocrCorrectionSubject: 'Improvement to OCR text',
+    ocrCorrectionBody: `
+My suggested correction:
+
+"{{text}}"
+
+-----
+
+Page:
+{{url}}
+
+{{metadata}}
+Reference code: {{signature}}
+Page: {{page}}
+Line:
+
+"{{text}}"
+
+-----
+
+
+`,
+  },
 };
