@@ -42,6 +42,13 @@ const TextContainer = styled('div', {
   display: visible ? 'block' : 'none',
 }));
 
+/** Separator between the texts of the pages, for example in book view. */
+const PageSeparator = styled('hr')(() => ({
+  border: 0,
+  borderTop: '1px solid #000000',
+  margin: '8px 0',
+}));
+
 const Paragraph = styled('div')({
   margin: '0.25em 0',
 });
@@ -256,8 +263,10 @@ class MiradorOcrWindowViewer extends Component {
         >
           {textsAvailable &&
             !textsFetching &&
-            pageTexts?.map((page) =>
-              page?.lines?.map((line, index) => {
+            pageTexts?.map((page, pageIndex) => (
+              <React.Fragment key={page?.canvasId ?? pageIndex}>
+                {pageIndex > 0 && page?.lines?.length > 0 && <PageSeparator />}
+                {page?.lines?.map((line, index) => {
                 const showLine =
                   !skipEmptyLines ||
                   (line.width > 0 && line.height > 0 && line.text.trim().length > 0);
@@ -298,8 +307,9 @@ class MiradorOcrWindowViewer extends Component {
                     </LineWrap>
                   </Paragraph>
                 );
-              }),
-            )}
+                })}
+              </React.Fragment>
+            ))}
         </TextContainer>
       </Wrap>
     );
