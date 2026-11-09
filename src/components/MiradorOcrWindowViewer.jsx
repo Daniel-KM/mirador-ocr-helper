@@ -111,7 +111,7 @@ class MiradorOcrWindowViewer extends Component {
   constructor(props) {
     super(props);
     this.state = {};
-    this.lineRefs = [];
+    this.lineRefs = new Map();
   }
 
   componentDidMount() {
@@ -133,7 +133,7 @@ class MiradorOcrWindowViewer extends Component {
     if (this.textPollInterval) {
       clearInterval(this.textPollInterval);
     }
-    this.lineRefs = [];
+    this.lineRefs = new Map();
   }
 
   static getDerivedStateFromError() {
@@ -167,8 +167,10 @@ class MiradorOcrWindowViewer extends Component {
     }
   }
 
-  scrollTo({ index }) {
-    const element = Array.isArray(this.lineRefs) ? this.lineRefs[index] : null;
+  scrollTo(line) {
+    // The refs are stored by line, because the index of a line is relative to
+    // its page and there are two pages in book view.
+    const element = this.lineRefs.get(line);
     if (!element) return;
     const method =
       typeof element.scrollIntoViewIfNeeded === 'function'
@@ -274,7 +276,11 @@ class MiradorOcrWindowViewer extends Component {
                 return (
                   <Paragraph
                     ref={(ref) => {
-                      this.lineRefs[index] = ref;
+                      if (ref) {
+                        this.lineRefs.set(line, ref);
+                      } else {
+                        this.lineRefs.delete(line);
+                      }
                     }}
                     key={`line_${line.x}_${line.y}`}
                   >
@@ -286,7 +292,7 @@ class MiradorOcrWindowViewer extends Component {
                       <LineButton
                         className="ocr-line"
                         type="button"
-                        onClick={() => doHighlightLine(canvasId, line, 'text')}
+                        onClick={() => doHighlightLine(page.canvasId ?? canvasId, line, 'text')}
                       >
                         {line.text}
                       </LineButton>

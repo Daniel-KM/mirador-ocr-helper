@@ -133,27 +133,29 @@ class MiradorTextOverlay extends Component {
       }
       this.containerRef.current.style.transform = transforms.join(' ');
     }
-    for (let itemNo = 0; itemNo < viewer.world.getItemCount(); itemNo += 1) {
-      // Skip update if we don't have a reference to the PageTextDisplay instance
-      if (!this.renderRefs[itemNo].current) {
-        // eslint-disable-next-line no-continue
-        continue;
+    // Position each page from its canvas in the world of Mirador, not from the
+    // tiled images, whose order depends on their loading in book view.
+    const worldToScreenScale = viewer.container.clientWidth * viewportZoom;
+    (this.props.pageTexts || []).forEach((page, idx) => {
+      const ref = this.renderRefs[idx];
+      if (!ref?.current || !page?.canvasId || !page?.width || !page?.height) return;
+      let worldX;
+      let worldY;
+      let worldWidth;
+      let worldHeight;
+      try {
+        [worldX, worldY, worldWidth, worldHeight] = canvasWorld.canvasToWorldCoordinates(page.canvasId);
+      } catch (_e) {
+        return;
       }
-      const img = viewer.world.getItemAt(itemNo);
-      const canvasDims = canvasWorld.canvasDimensions[itemNo];
-      const canvasWorldOffset =
-        itemNo > 0
-          ? img.source.dimensions.x -
-            canvasDims.width +
-            canvasWorld.canvasDimensions[itemNo - 1].width
-          : 0;
-      const canvasWorldScale = img.source.dimensions.x / canvasDims.width;
-      this.renderRefs[itemNo].current.updateTransforms(
-        img.viewportToImageZoom(viewportZoom),
-        vpBounds.x * canvasWorldScale - canvasWorldOffset,
-        vpBounds.y * canvasWorldScale,
+      const worldPerTextX = worldWidth / page.width;
+      const worldPerTextY = worldHeight / page.height;
+      ref.current.updateTransforms(
+        worldToScreenScale * worldPerTextX,
+        (vpBounds.x - worldX) / worldPerTextX,
+        (vpBounds.y - worldY) / worldPerTextY,
       );
-    }
+    });
   }
 
   /** Locate the currently highlighted line across all pageTexts. */
@@ -213,31 +215,37 @@ class MiradorTextOverlay extends Component {
    * far away from the current view.
    */
   zoomToLine(idx, line) {
-    const { viewer } = this.props;
-    if (!viewer || !line) return;
-    const item = viewer.world.getItemAt(idx);
-    const viewport = viewer.viewport;
-    if (!item || !viewport || typeof viewport.imageToViewportRectangle !== 'function') {
+    const { viewer, pageTexts, canvasWorld } = this.props;
+    if (!viewer || !line || !canvasWorld) return;
+    const page = pageTexts?.[idx];
+    if (!page?.canvasId || !page?.width || !page?.height) return;
+    // The line is in the coordinates of its canvas, so convert it through the
+    // position of this canvas in the world: it manages the page of the book
+    // view, independently of the loading order of the images.
+    let worldX;
+    let worldY;
+    let worldWidth;
+    let worldHeight;
+    try {
+      [worldX, worldY, worldWidth, worldHeight] = canvasWorld.canvasToWorldCoordinates(page.canvasId);
+    } catch (_e) {
       return;
     }
-    // Pad in image-space, then convert through the viewport (which knows
-    // both the tiled image and the world layout). OSD's TiledImage
-    // .imageToViewportRectangle does not always do the normalization we
-    // need; viewport.imageToViewportRectangle is reliable for a single
-    // tiled image at world index 0.
+    const scaleX = worldWidth / page.width;
+    const scaleY = worldHeight / page.height;
     const pad = line.height * 1.5;
-    const padded = viewport.imageToViewportRectangle(
-      line.x - pad,
-      line.y - pad,
-      line.width + pad * 2,
-      line.height + pad * 2,
-    );
-    if (!padded) return;
+    // Clone to keep an OpenSeadragon Rect without importing the library.
+    const padded = viewer.viewport.getBounds().clone();
+    padded.degrees = 0;
+    padded.x = worldX + (line.x - pad) * scaleX;
+    padded.y = worldY + (line.y - pad) * scaleY;
+    padded.width = (line.width + pad * 2) * scaleX;
+    padded.height = (line.height + pad * 2) * scaleY;
     try {
-      if (typeof viewport.fitBoundsWithConstraints === 'function') {
-        viewport.fitBoundsWithConstraints(padded);
+      if (typeof viewer.viewport.fitBoundsWithConstraints === 'function') {
+        viewer.viewport.fitBoundsWithConstraints(padded);
       } else {
-        viewport.fitBounds(padded);
+        viewer.viewport.fitBounds(padded);
       }
     } catch (_e) {
       // Bounds outside the source dimensions; skip silently rather than
