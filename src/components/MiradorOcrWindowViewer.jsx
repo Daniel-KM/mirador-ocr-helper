@@ -241,15 +241,18 @@ class MiradorOcrWindowViewer extends Component {
       return null;
     }
 
+    // Do not render OCR panel if there are no OCR texts (files) available
+    const effectivePanelVisible = panelVisible !== false && textsAvailable;
+
     return (
       <Wrap>
-        <ViewerContainer panelVisible={panelVisible !== false}>
+        <ViewerContainer panelVisible={effectivePanelVisible}>
           {TargetComponent && <TargetComponent {...targetProps} />}
         </ViewerContainer>
         <TextContainer
           className="ocr-container"
           textsAvailable={textsAvailable}
-          visible={panelVisible !== false}
+          visible={effectivePanelVisible}
         >
           {textsAvailable &&
             !textsFetching &&
