@@ -13,6 +13,7 @@ import { getTextsAvailable, getTextsForVisibleCanvases, getWindowTextOverlayOpti
 import MiradorTextOverlay from './components/MiradorTextOverlay.jsx';
 import MiradorOcrWindowViewer from './components/MiradorOcrWindowViewer.jsx';
 import OcrHelperMenuItem from './components/OcrHelperMenuItem.jsx';
+import OcrPanelToggle from './components/OcrPanelToggle.jsx';
 import OverlaySettings from './components/settings/OverlaySettings.jsx';
 // This plugin is fully self-contained: it ships its own OverlaySettings bubble
 // (visibility / text selection / opacity / palette / collapse) on the
@@ -107,6 +108,19 @@ export default [
         })),
       };
     },
+    mapDispatchToProps: (dispatch, { windowId }) => ({
+      updateWindowTextOverlayOptions: (newOptions) =>
+        dispatch(updateWindow(windowId, { textOverlay: newOptions })),
+    }),
+  },
+  {
+    component: OcrPanelToggle,
+    target: 'WindowTopBarPluginArea',
+    mode: 'add',
+    mapStateToProps: (state, { windowId }) => ({
+      textsAvailable: getTextsAvailable(state, { windowId }),
+      windowTextOverlayOptions: getWindowTextOverlayOptions(state, { windowId }),
+    }),
     mapDispatchToProps: (dispatch, { windowId }) => ({
       updateWindowTextOverlayOptions: (newOptions) =>
         dispatch(updateWindow(windowId, { textOverlay: newOptions })),

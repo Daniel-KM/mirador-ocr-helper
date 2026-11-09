@@ -153,7 +153,7 @@ const OverlaySettings = ({
           <>
             <ButtonContainer withBorder paddingPrev={isSmallDisplay ? 8 : 0} paddingNext={0}>
               <MiradorMenuButton
-                aria-label={t('panelVisible') || 'Show / hide OCR panel'}
+                aria-label={t('panelVisible') || 'Show/hide transcription'}
                 onClick={() => {
                   updateWindowTextOverlayOptions({
                     ...windowTextOverlayOptions,
