@@ -315,12 +315,13 @@ class PageTextDisplay extends React.Component {
     // NOTE: Gecko really works best with a flattened bunch of text nodes. Wrapping the
     //       lines in a <g>, e.g. breaks text selection in similar ways to the below
     //       WebKit-specific note, for some reason ¯\_(ツ)_/¯
+    // NOTE: LineWrapper is used as a component type (<LineWrapper key=...>), so in Gecko
+    //       it must be the React.Fragment type itself, not a fragment element (<></>).
+    //       Passing an element as a type throws React error #130 and breaks the viewer.
     // eslint-disable-next-line require-jsdoc
-    const LineWrapper = isGecko ? (
-      <></>
-    ) : (
-      ({ children }) => <text style={textStyle}>{children}</text>
-    );
+    const LineWrapper = isGecko
+      ? React.Fragment
+      : ({ children }) => <text style={textStyle}>{children}</text>;
     // eslint-disable-next-line require-jsdoc
     function SpanElem(props) {
       return isGecko ? <text style={textStyle} {...props} /> : <tspan {...props} />;
